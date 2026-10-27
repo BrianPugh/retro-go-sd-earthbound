@@ -17,6 +17,74 @@ One tree = one binary. Choose the kind at build time:
 Read `README.md` for build/pack basics. Read `sdk/ld/core_ram_emu.ld` for
 the default linker contract. This file is the memory + porting checklist.
 
+## EarthBound port (this tree)
+
+This tree builds EarthBound (`external/earthbound`, the C reimplementation)
+as a GWHB homebrew for the upstream firmware's `external_cores` branch
+(ABI v2). It replaces the firmware-fork integration (firmware PR #91,
+`earthbound` branch of game-and-watch-retro-go-sd, which stays the
+known-good hardware reference). The SDK template sections below still apply.
+
+**Build.** Needs the donor ROM at `./earthbound.sfc` (or
+`EARTHBOUND_SFC=...`), arm-none-eabi-gcc on `PATH` or `GCC_PATH=...`, and
+`git submodule update --init --recursive`. The first build runs the
+submodule's `unix-venv unix-extract` to set up ebtools and extract assets.
+
+```bash
+make -j10 GCC_PATH=/Applications/ArmGNUToolchain/15.3.rel2/arm-none-eabi/bin
+make sdpush   # EarthBound.bin + earthbound.ro → /homebrews/
+```
+
+**Outputs.** `EarthBound.bin` (GWHB, `PACKED_BIN`) and `earthbound.ro`
+(rodata sidecar, ~3.8 MB). Always push **both**: a stale `.ro` against a
+new `.bin` silently corrupts strings, because `PatchCodeRodataOffset`
+rewrites code pointers using the new layout. `earthbound.ro` is always
+written to the repo root, even with a different `BUILD_DIR`, so a second
+build config overwrites the first one's sidecar.
+
+**Memory layout** (`src/earthbound_core.ld`, comment at the top explains it):
+RAM_EMU holds code + `.bss` and must leave ≥ 74 KB for the `ram_malloc`
+heap (lakesnes audio; link ASSERT). The cold entity/map_loader tables and
+the stereo scratch (~35 KB) go in an ITCM NOLOAD segment, since the SDK
+forbids AHB segments. Rodata links at a sentinel VMA and is extracted to the
+sidecar.
+
+**Rodata pointer rule.** Pointers stored *inside* the sidecar are never
+patched. A const table that points into `.rodata` must be `EB_NORELOC`.
+`scripts/check_eb_rodata_relocs.py` runs before packing and fails the build
+(deleting the ELF) when one slips through.
+
+**ABI feature flags.** Code that needs firmware ABI additions that aren't
+upstream yet is behind flags defaulting to 0, marked `TODO(eb-gwhb)`, with a
+stand-in path that works on stock `external_cores`. Set them with
+`EB_EXTRA_DEFS` (passed to `CORE_C_DEFS`):
+
+| Flag | Needs firmware with | Stand-in when 0 |
+| --- | --- | --- |
+| `EB_GW_ABI_TB_PRESENT` | `lcd_present_at_vblank` + `common_ingame_overlay_to` | double-buffered `lcd_swap()` |
+| `EB_GW_ABI_FATFS_FILES` | `f_open`/`f_read`/`f_write`/`f_lseek`/`f_sync`/`f_close` | newlib stdio savestates |
+| `EB_GW_ABI_AUDIO_REFILL` | SAI-ISR refill callback (no firmware branch yet) | ring drained by polling `dma_counter` |
+
+```bash
+make BUILD_DIR=build/abi PACKED_BIN=build/abi/EarthBound.bin \
+     EB_EXTRA_DEFS="-DEB_GW_ABI_TB_PRESENT=1 -DEB_GW_ABI_FATFS_FILES=1"
+```
+
+A flag set to 1 only links when `sdk/` was synced from a firmware tree that
+has those ABI fields.
+
+**SDK sync gotchas.**
+- The bridge sets `required_abi_min_size = sizeof(gw_firmware_abi_t)`. Every
+  sync from a firmware with more ABI fields raises the minimum firmware for
+  all binaries built afterwards, even if EB doesn't call the new functions.
+- `scripts/sync_from_firmware.sh` rewrites FatFs files with CRLF churn.
+  Revert those hunks before committing.
+- In the root `Makefile`, `CORE_EXTRA_OBJECTS` must be set before
+  `include $(GNW_CORE_SDK)/Makefile` or the SDK rules don't see it.
+
+**Never commit** `earthbound.sfc` or anything derived from it (`*.ro`,
+extracted assets). `.gitignore` covers `*.sfc` and `*.ro`.
+
 ## Mental model
 
 ```
@@ -367,8 +435,9 @@ In this repo after a firmware change:
 
 | Path     | Notes                                                                 |
 | -------- | --------------------------------------------------------------------- |
-| `src/main.c` | Shared CORE / GWHB skeleton (`PROJECT_KIND_*`); LCD + audio beep demo |
+| `src/main_earthbound.c` | GWHB entry `app_main_earthbound`: rodata sidecar caching + `PatchCodeRodataOffset`, savestate/resume glue |
+| `src/eb_main.c` | `earthbound_main()` game loop (the submodule's old `port/gw_retro_go/main.c`); the template's `src/main.c` demo was removed |
+| `src/gw_*.c` | EB `platform.h` implementations (video, audio, input, save, savestate, timer, debug) |
+| `tools/eb_profile/` | PC-sampling profiler over ST-Link/OpenOCD (see its README) |
 
-
-Start from `src/main.c` when placing WRAM / heaps / interpreters; use the
-memory map above for ITCM / DTCM / AHB / RAM_EMU choices.
+Use the memory map above for ITCM / DTCM / AHB / RAM_EMU choices.
