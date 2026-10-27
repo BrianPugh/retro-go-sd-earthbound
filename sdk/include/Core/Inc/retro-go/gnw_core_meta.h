@@ -60,10 +60,10 @@ typedef enum {
 
 /* How the launcher should populate a system's ROM browser list. GNW_PARSE_ROM
  * is the default (one file = one game, filtered by extension — see
- * scan_folder_cb()). GNW_PARSE_CDROM is the .cue-based folder scan PC Engine
- * CD already needed in the old compile-time build (see
- * emulator_scan_cdrom_folder() / cdrom_collapse_game_dir()): a game is a
- * folder containing track files, collapsed to a single .cue browser row. */
+ * scan_folder_cb()). GNW_PARSE_CDROM collapses per-game folders that contain
+ * a .cue (see emulator_scan_cdrom_folder() / cdrom_collapse_game_dir()) and
+ * also lists loose files whose extension is in gnw_core_system_t.extensions
+ * (e.g. .chd / .iso next to cue+bin game folders). */
 typedef enum {
     GNW_PARSE_ROM   = 0,
     GNW_PARSE_CDROM = 1,

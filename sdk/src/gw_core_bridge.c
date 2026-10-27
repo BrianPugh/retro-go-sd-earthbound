@@ -1374,6 +1374,13 @@ void core_store_data_abort(void *st)
 {
     gw_firmware_abi()->store_data_abort(st);
 }
+uint32_t core_flash_cache_usable_size(void)
+{
+    const gw_firmware_abi_t *abi = gw_firmware_abi();
+    if (!abi->flash_cache_usable_size)
+        return 0;
+    return abi->flash_cache_usable_size();
+}
 int core_lcd_get_mode(void)
 {
     return gw_firmware_abi()->lcd_get_mode();
@@ -1382,6 +1389,40 @@ void core_odroid_overlay_draw_progress_bar(const char *header, uint8_t progress)
 {
     gw_firmware_abi()->odroid_overlay_draw_progress_bar(header, progress);
 }
+bool core_odroid_overlay_progress_poll_cancel(void)
+{
+    const gw_firmware_abi_t *abi = gw_firmware_abi();
+    if (!abi->odroid_overlay_progress_poll_cancel)
+        return false;
+    return abi->odroid_overlay_progress_poll_cancel();
+}
+bool core_odroid_overlay_draw_progress_bar_cancellable(const char *header, uint8_t progress)
+{
+    const gw_firmware_abi_t *abi = gw_firmware_abi();
+    if (!abi->odroid_overlay_draw_progress_bar_cancellable)
+        return true; /* old firmware: keep going */
+    return abi->odroid_overlay_draw_progress_bar_cancellable(header, progress);
+}
+uint8_t *core_odroid_overlay_cache_file_in_flash_cancellable(const char *file_path,
+                                                             uint32_t *file_size_p,
+                                                             bool byte_swap)
+{
+    const gw_firmware_abi_t *abi = gw_firmware_abi();
+    if (!abi->odroid_overlay_cache_file_in_flash_cancellable)
+        return abi->odroid_overlay_cache_file_in_flash(file_path, file_size_p, byte_swap);
+    return abi->odroid_overlay_cache_file_in_flash_cancellable(file_path, file_size_p, byte_swap);
+}
+uint8_t *core_odroid_overlay_cache_file_in_flash_relocate_cancellable(
+    const char *file_path, uint32_t *file_size_p, bool byte_swap,
+    gw_flash_relocate_cb_t relocate_cb)
+{
+    const gw_firmware_abi_t *abi = gw_firmware_abi();
+    if (!abi->odroid_overlay_cache_file_in_flash_relocate_cancellable)
+        return abi->odroid_overlay_cache_file_in_flash_relocate(
+            file_path, file_size_p, byte_swap, relocate_cb);
+    return abi->odroid_overlay_cache_file_in_flash_relocate_cancellable(
+        file_path, file_size_p, byte_swap, relocate_cb);
+}
 bool core_rg_storage_mkdir(const char *dir)
 {
     return gw_firmware_abi()->rg_storage_mkdir(dir);
@@ -1389,4 +1430,23 @@ bool core_rg_storage_mkdir(const char *dir)
 const char *core_rg_dirname(const char *path)
 {
     return gw_firmware_abi()->rg_dirname(path);
+}
+
+/* File-manager helpers (appended to the ABI after the v2 cancellable-cache block).
+ * Older firmware ends its table before them, and whatever follows the table in flash is
+ * not guaranteed to be NULL, so check `size` before reading the slot. */
+#define CORE_ABI_HAS(field) \
+    (gw_firmware_abi()->size >= offsetof(gw_firmware_abi_t, field) + sizeof(void *) && \
+     gw_firmware_abi()->field != NULL)
+bool core_rg_storage_rename(const char *old_path, const char *new_path)
+{
+    if (!CORE_ABI_HAS(rg_storage_rename))
+        return false;
+    return gw_firmware_abi()->rg_storage_rename(old_path, new_path);
+}
+bool core_rg_storage_free_space(const char *path, uint64_t *free_bytes, uint64_t *total_bytes)
+{
+    if (!CORE_ABI_HAS(rg_storage_free_space))
+        return false;
+    return gw_firmware_abi()->rg_storage_free_space(path, free_bytes, total_bytes);
 }

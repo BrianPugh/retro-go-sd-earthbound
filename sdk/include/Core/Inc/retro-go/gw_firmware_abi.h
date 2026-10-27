@@ -635,12 +635,10 @@ typedef struct {
      * against these slots cannot run on stock firmware, because
      * gnw_core_probe() gates on required_abi_min_size <= sizeof(abi).
      * ================================================================ */
-    /* NULL on SD_CARD=0 builds: gw_flash_alloc.c is SD-only, and a flash
-     * build has no reason to derive this data at runtime -- the same
-     * bytes ship as an uncompressed FrogFS file that
-     * odroid_overlay_cache_file_in_flash() maps in place with no copy.
-     * Test for NULL and use the file. The slots stay present in both
-     * variants so the table layout never differs. */
+    /* Both builds provide lookup: SD probes the writable NOR cache, while
+     * SD_CARD=0 resolves a preplaced FrogFS sidecar through its LittleFS
+     * index. Store slots below remain NULL on SD_CARD=0. Keep the slots in
+     * both variants so the ABI table layout never differs. */
     const uint8_t *(*lookup_data_in_flash)(const char *key, uint32_t *size_out);
     const uint8_t *(*store_data_in_flash)(const char *key, const uint8_t *data,
                                           uint32_t data_size);
@@ -662,6 +660,36 @@ typedef struct {
     void (*odroid_overlay_draw_progress_bar)(const char *header, uint8_t progress);
     bool (*rg_storage_mkdir)(const char *dir);
     const char *(*rg_dirname)(const char *path);
+
+    /* ================================================================
+     * v2 append: flash cache capacity (extflash − reserved OFW / layout).
+     * NULL on SD_CARD=0 builds (same as the other flash_alloc slots).
+     * ================================================================ */
+    uint32_t (*flash_cache_usable_size)(void);
+
+    /* ================================================================
+     * v2 append: cancellable progress / flash-cache helpers.
+     * Original draw_progress_bar + cache_file_in_flash stay non-cancellable.
+     * NULL on older firmware — cores must NULL-check.
+     * ================================================================ */
+    bool     (*odroid_overlay_progress_poll_cancel)(void);
+    bool     (*odroid_overlay_draw_progress_bar_cancellable)(const char *header, uint8_t progress);
+    uint8_t *(*odroid_overlay_cache_file_in_flash_cancellable)(const char *file_path,
+                                                               uint32_t *file_size_p,
+                                                               bool byte_swap);
+    uint8_t *(*odroid_overlay_cache_file_in_flash_relocate_cancellable)(
+        const char *file_path, uint32_t *file_size_p, bool byte_swap,
+        gw_flash_relocate_cb_t relocate_cb);
+
+    /* ================================================================
+     * v2 append: file-manager helpers (rename/move without copying, free
+     * space). NULL / absent on older firmware — check `size` before use.
+     * rg_storage_rename() REPLACES an existing destination: callers that
+     * must not overwrite have to check with rg_storage_exists() first.
+     * ================================================================ */
+    bool     (*rg_storage_rename)(const char *old_path, const char *new_path);
+    bool     (*rg_storage_free_space)(const char *path, uint64_t *free_bytes,
+                                      uint64_t *total_bytes);
 
 } gw_firmware_abi_t;
 
