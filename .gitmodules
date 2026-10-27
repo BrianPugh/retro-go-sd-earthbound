@@ -1,0 +1,3 @@
+[submodule "external/earthbound"]
+	path = external/earthbound
+	url = git@github.com:BrianPugh/earthbound.git
