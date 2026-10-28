@@ -109,7 +109,7 @@ Then on the Game & Watch, open the launcher, go to the **Homebrew** tab and pick
 | --- | --- |
 | D-pad | Move |
 | A | Talk / check, confirm, advance text |
-| B | Cancel / back; shows everyone's HP and PP while walking around |
+| B | Open the command menu (Goods, PSI, Equip, ...); cancel / back |
 | GAME | Town map |
 | TIME | Show/hide the performance overlay |
 | PAUSE/SET | Retro-Go menu (savestates, volume, brightness, quit) |

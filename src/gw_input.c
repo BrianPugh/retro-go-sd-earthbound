@@ -4,13 +4,13 @@
  *
  * EarthBound's button map:
  *   - SNES L (auto-check)  on G&W A
- *   - SNES B (cancel/dash) on G&W B
+ *   - SNES B (cancel; command menu on the overworld) on G&W B
  *   - SNES X (town map)    on G&W GAME
  *   - FPS overlay toggle   on G&W TIME (via AUX_FPS_TOGGLE → upstream)
  *   - G&W PAUSE/SET        retro-go menu + chord modifier (save state, etc.)
  *
- * SNES A is unmapped: L's auto-check interacts with the nearest object
- * regardless of facing, so it strictly supersedes A in normal play.
+ * SNES A is unmapped: B already opens the command menu, and L's auto-check
+ * interacts with the nearest object regardless of facing.
  * SNES Y, Select, and R are unmapped — not needed for the buttons available
  * on a Mario unit.
  *
