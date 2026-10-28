@@ -2,6 +2,14 @@
 
 Each release tag needs a section here with a matching heading (`## [vX.Y.Z] - YYYY-MM-DD`); CI uses its body as the GitHub Release notes.
 
+## [v0.1.1] - 2026-10-28
+
+### Fixed
+
+- The [conversion page](https://brianpugh.github.io/retro-go-sd-earthbound/) failed on every run with "module produced [assets] but the manifest declares [earthbound_assets.dat]". It now produces `earthbound_assets.dat`.
+
+The game itself is unchanged from v0.1.0, and so is `earthbound_assets.dat`: if you already built it with `make`, you don't need to convert again.
+
 ## [v0.1.0] - 2026-10-28
 
 First release: EarthBound running natively on the Game & Watch as a Retro-Go SD homebrew, built from the [C reimplementation](https://github.com/BrianPugh/earthbound) (no SNES emulation).
