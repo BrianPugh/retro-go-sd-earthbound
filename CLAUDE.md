@@ -41,9 +41,10 @@ table of the exact RAM_EMU words to relocate at boot
 (`scripts/append_eb_reloc_table.py`, from `--emit-relocs`), so a stale `.ro`
 patches the wrong words (it asserts only when the trailer is missing). Never
 go back to scanning RAM_EMU for values in the rodata range: Thumb-2
-instructions collide with it (that corrupted the bridge `memcpy`). `earthbound.ro` is always
-written to the repo root, even with a different `BUILD_DIR`, so a second
-build config overwrites the first one's sidecar.
+instructions collide with it (that corrupted the bridge `memcpy`).
+`earthbound.ro` is written next to `PACKED_BIN`, so a second build config
+needs its own `PACKED_BIN` (e.g. `BUILD_DIR=build/x
+PACKED_BIN=build/x/EarthBound.bin`) to keep its own sidecar.
 
 **Hardware test.** Upstream `external_cores` firmware reads `/bios/logo.bin`
 (extracted from its own ELF) and BSODs with "unable to open logo file"

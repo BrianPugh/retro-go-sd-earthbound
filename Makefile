@@ -11,6 +11,7 @@
 #
 # Sidecars on SD (not in the GWHB):
 #   /homebrews/earthbound.ro  — rodata: compiled const tables + ROM assets
+#                               (written next to PACKED_BIN)
 #
 # Verbose compiler lines: make V=
 
@@ -23,7 +24,10 @@ CORE_NAME  := earthbound
 CORE_ENTRY := app_main_earthbound
 
 PACKED_BIN := EarthBound.bin
-RO_BIN     := earthbound.ro
+# The .ro must always ship with the .bin it was built with (see the $(RO_BIN)
+# rule), so it's written next to PACKED_BIN: a second build config with its own
+# PACKED_BIN=build/x/EarthBound.bin gets its own build/x/earthbound.ro.
+RO_BIN     := $(patsubst ./%,%,$(dir $(PACKED_BIN))earthbound.ro)
 SIDECARS   := $(RO_BIN)
 HB_NAME    := EarthBound
 
@@ -298,6 +302,7 @@ $(RELOC_CHECK): $(TARGET_ELF) scripts/check_eb_rodata_relocs.py
 # (see scripts/append_eb_reloc_table.py), so it must always match the .bin.
 $(RO_BIN): $(TARGET_ELF) $(RELOC_CHECK) scripts/append_eb_reloc_table.py
 	$(V)$(ECHO) [ RO ] $(RO_BIN)
+	$(V)mkdir -p $(dir $@)
 	$(V)$(CP) -O binary --only-section=.rodata_earthbound $< $@
 	$(V)python3 scripts/append_eb_reloc_table.py $(TOOL_PREFIX) $< $@ || (rm -f $@; exit 1)
 
