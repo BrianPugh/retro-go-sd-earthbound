@@ -1,262 +1,158 @@
-# Retro-Go SD Core / Homebrew Template
+# EarthBound for the Game & Watch
 
-Standalone SDK and starter project for building **one** external emulator
-core **or** **one** GWHB homebrew for
-[Game & Watch Retro-Go SD](https://github.com/sylverb/game-and-watch-retro-go-sd).
+Play EarthBound on a modded Nintendo Game & Watch running [Retro-Go SD](https://github.com/sylverb/game-and-watch-retro-go-sd).
 
-This repository is the project: clone or copy it, set `PROJECT_KIND`, customize
-`src/main.c` / pack metadata, and ship a single `.bin`. Do not put several
-emulators or homebrews in the same tree.
+This is not an emulator running the SNES cartridge. It's a [native C reimplementation of EarthBound](https://github.com/BrianPugh/earthbound), built as a Retro-Go SD **homebrew**: you build 2 files on your computer, copy them to the Game & Watch's SD card, and EarthBound shows up in the launcher's Homebrew tab.
 
-Both kinds share the same freestanding Cortex-M7 build (linked into
-`RAM_EMU`, talking to the launcher **only** through `gw_firmware_abi_t`).
-They differ in packaging and SD layout:
+No game data is included in this repository. You need your own copy of the US EarthBound ROM, and the build extracts the graphics, music and text from it.
 
+## What you need
 
-| | Dynamic core (`PROJECT_KIND=core`) | Homebrew (`PROJECT_KIND=homebrew`) |
-|--|-----------------------------------|-------------------------------------|
-| Packer | `sdk/tools/pack_core.py` (`CORE`) | `sdk/tools/pack_homebrew.py` (`GWHB`) |
-| SD path | `/cores/<name>.bin` | `/roms/homebrew/<name>.bin` |
-| Launcher | New system tab (dirname + extensions) | Homebrew tab |
-| Assets | Pad/header 1bpp logos (`src/assets/`) | Optional JPEG cover (≤186×100, ≤10 KiB) |
-| `src/main.c` | Loads the ROM given by the launcher | No ROM — `ACTIVE_FILE` is this `.bin` |
+**Hardware**
 
-Headers, bridge trampolines, linker scripts, and packers are vendored under
-`sdk/`. You do **not** need a firmware checkout to compile.
+- A Game & Watch (Mario or Zelda) with the SD-card mod, running Retro-Go SD firmware built from the [`external_cores` branch](https://github.com/sylverb/game-and-watch-retro-go-sd/tree/external_cores). Older firmware can't load homebrews like this one.
+- A way to get files onto its SD card: either a card reader, or a debug probe (ST-Link, J-Link or a Raspberry Pi Pico) with [gnwmanager](https://github.com/BrianPugh/gnwmanager).
 
-## Requirements
+**A ROM**
 
-**Local build**
+- A US EarthBound ROM (`.sfc` or `.smc`, with or without the 512-byte copier header). Dump it from a cartridge you own.
 
-- `arm-none-eabi-gcc` (v10+, same family as the firmware; hard-float
-  `fpv5-d16` is mandatory — ABI calling convention must match)
-- GNU Make
-- Python 3 + Pillow (`pip install -r requirements.txt`) for packaging
-  logos / homebrew covers from PNG/BMP/JPEG
+**Software** (macOS or Linux; on Windows, use [WSL](https://learn.microsoft.com/windows/wsl/install))
 
-**Host SDL preview** (optional, Linux / macOS)
+- `git` and `make`
+- Python 3.10 or newer
+- The Arm GNU Toolchain (`arm-none-eabi-gcc`). Download the "AArch32 bare-metal target (arm-none-eabi)" build for your system from [Arm's download page](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads). Version 15.3.Rel2 is known to work.
 
-- Native C compiler (`cc` / clang / gcc)
-- pkg-config
-- SDL2 (`libsdl2-dev` / `brew install sdl2`) or SDL3 (`HOST_SDL=3`)
-
-**Docker build** (no host toolchain)
-
-- Docker
-- Image [`sylverb/retro-go-sd-builder`](https://hub.docker.com/r/sylverb/retro-go-sd-builder)
-  (same tag as the firmware repo, default `v1.5`)
-
-## Quick start
-
-Local (default = core):
+You can check the toolchain is installed with:
 
 ```bash
-make
-# or: make PROJECT_KIND=homebrew
+arm-none-eabi-gcc --version
 ```
 
-Docker:
+If that says "command not found", either add the toolchain's `bin` folder to your `PATH`, or pass its location to `make` with `GCC_PATH=...` (shown below).
+
+## Building
+
+### 1. Get the code
 
 ```bash
-make docker
-make docker PROJECT_KIND=homebrew
+git clone --recurse-submodules https://github.com/BrianPugh/retro-go-sd-earthbound.git
+cd retro-go-sd-earthbound
 ```
 
-Override the image tag if needed: `make docker RELEASE_VERSION=v1.5`.
-
-The packed header version is taken from `git describe --tags --dirty`
-(`CORE_VERSION`; override with `make CORE_VERSION=v1.2.3`). No tags →
-`NOTAG` → header `0.0.0`. Release tags should be `vX.Y.Z` so the Info
-dialog can show a semantic version.
-
-Produces:
-
-- **core:** `example.bin` → `/cores/example.bin`, test ROMs under `/roms/example/`
-- **homebrew:** `ExampleHB.bin` → `/roms/homebrew/ExampleHB.bin`
-  (optional override cover: `/covers/homebrew/ExampleHB.img`)
-
-The skeleton draws a framebuffer with the ROM / file name, beeps a square
-wave while a gameplay button is held, and wires save/load state, screenshot,
-sleep wake-up, and SRAM hooks via `odroid_system_emu_init`. Replace the stubs
-in `src/main.c` with your emulator or game.
-
-Useful Docker targets:
-
-- `make docker` — build + pack in the local builder image
-- `make docker_pull` — refresh the image from Docker Hub
-- `make docker_shell` — interactive shell in the same mount
-
-## Host preview (SDL)
-
-Compile the **same** `src/main.c` into a desktop binary for faster iteration
-(no G&W flash cycle). This does not replace the ARM pack for the device.
+`--recurse-submodules` matters: the EarthBound code itself lives in a separate repository under `external/earthbound`. If you already cloned without it, run:
 
 ```bash
-make host                       # SDL2 → ./example_host
-make host HOST_SDL=3            # SDL3 (needs sdl3.pc)
-make host PROJECT_KIND=homebrew # → ./ExampleHB_host
-./example_host                  # Esc / close window to quit
-./example_host /path/to/rom.bin # optional ROM for cores (or HOST_ROM=…)
+git submodule update --init --recursive
 ```
 
-On macOS, if `pkg-config sdl2` fails, point it at Homebrew:
+### 2. Install the Python packages
 
 ```bash
-export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+python3 -m pip install -r requirements.txt
 ```
 
-Controls: arrows = D-pad, `Z`/`X` = B/A, Enter = Start, Shift = Select,
-`A`/`S` = Y/X (core Start/Select on G&W). `F1` = save state, `F2` = load
-state (files under `./host_saves/`). Scale with `HOST_SCALE=2` (default).
+### 3. Add your ROM
 
-Note: the template `SaveState` / `LoadState` stubs still return `false` until
-you implement them in `src/main.c` — F1/F2 will then write/read those paths.
-
-## Create your own core
-
-1. Keep `PROJECT_KIND=core` (the default).
-2. Edit the top of `Makefile`: `CORE_NAME`, `CORE_ENTRY`, `CORE_C_SOURCES`,
-   and the `pack_core.py` metadata (`--system-name`, `--dirname`,
-   `--extensions`, …).
-3. Drop footer graphics in `src/assets/` and point `--pad-logo` / `--header-logo`
-   at PNG or BMP files. Dark/opaque pixels become the lit 1bpp bits.
-   Optional: `--logo-width` / `--logo-height` / `--logo-invert`.
-4. If the core supports cheat files on the SD card, set `--cheat-ext`
-   (`ggcodes`, `pceplus`, or `mcf`). Leave empty when unsupported.
-5. Implement the loop in `src/main.c` (entry is `app_main` by default).
-6. `make` → drop the `.bin` under `/cores/`.
-
-## Create your own homebrew
-
-1. Build with `PROJECT_KIND=homebrew`.
-2. Edit `Makefile`: `CORE_NAME`, pack `--name` / `--cover` /
-   `--out`. Version comes from `git describe --tags --dirty` (override with
-   `CORE_VERSION=…`). You can drop the core-only pack recipe and
-   `PROJECT_KIND_CORE` branches once you no longer need them.
-3. Cover JPEG must decode ≤ **186×100** and be ≤ **10 KiB**. An on-disk
-   `/covers/homebrew/<stem>.img` **overrides** the embedded cover.
-4. Large assets that do not fit in RAM_EMU stay as **sibling files** under
-   `/roms/homebrew/` and are opened via the ABI.
-5. `make PROJECT_KIND=homebrew` → drop the `.bin` (and sidecars) under
-   `/roms/homebrew/`.
-
-Include order in `src/main.c`:
-
-```c
-#include "common.h"
-#include "odroid_system.h"
-/* … other firmware-style headers … */
-#include "gw_core_bridge.h"   /* last — rewrites ACTIVE_FILE / common_emu_state */
-```
-
-Undefined references at link time usually mean a symbol is missing from
-`sdk/src/gw_core_bridge_redefine_syms.txt` and/or lacks a `core_*` trampoline
-in `sdk/src/gw_core_bridge.c`. If the symbol is not on the ABI yet, extend
-the **firmware** ABI first, then refresh this SDK (see below).
-
-## Layout
-
-```
-Makefile            Project build + pack + docker (PROJECT_KIND=core|homebrew)
-src/                Project sources (main.c) and core logos (assets/)
-sdk/
-  include/          Vendored headers (ABI, odroid, CMSIS/HAL, FatFs, gwhb.h, …)
-  src/              Bridge, entry trampoline, i18n, redefine-syms map
-  ld/               RAM_EMU linker scripts (must match firmware);
-                    start with ld/core_ram_emu.ld
-  tools/            pack_core.py, pack_homebrew.py
-  Makefile          Shared compile/link rules (included by the root Makefile)
-host/               SDL host preview (stubs, shim, Makefile.host)
-scripts/            Sync helper, release staging, cover generator
-```
-
-## LUT8 mode (8-bit indexed palette)
-
-The firmware LCD supports **RGB565** (default, 2 bytes/pixel) and **LUT8**
-(1 byte/pixel, 256-entry CLUT). LUT8 halves the framebuffer footprint from
-300 KiB to 150 KiB, freeing 150 KiB of **bonus RAM** for the core.
-
-Use LUT8 when the emulated system has ≤ 256 simultaneous colors (Game Boy,
-NES, PICO-8, Master System, Game Gear, PC Engine…). Stay on RGB565 for
-direct-color / high-color systems (Mega Drive DAC, SNES hi-color, GBA with
-large palettes).
-
-Switch at init:
-
-```c
-lcd_setup_framebuffers(LCD_MODE_LUT8);
-lcd_set_clut(my_palette, palette_count);
-```
-
-Retrieve the freed memory:
-
-```c
-uint8_t *pool; size_t pool_size;
-lcd_get_bonus_pool(&pool, &pool_size);
-```
-
-See `CLAUDE.md` for full details (CLUT darkened twins, `lcd_pen_t`
-mode-agnostic drawing, overlay theme slots, constraints).
-
-## Releases (GitHub tags `v*`)
-
-Pushing a tag `vX.Y.Z` (with a matching `## [vX.Y.Z]` section in
-`CHANGELOG.md`) creates a GitHub Release with **two** zip assets only:
-
-| Asset | Contents |
-|-------|----------|
-| `<name>-vX.Y.Z.zip` | SD layout: `cores/<name>.bin` or `homebrews/<name>.bin` |
-| `<name>-vX.Y.Z-debug.zip` | `*_core.elf`, linker `.map`, and a short README |
-
-Unzip the install archive onto the SD card root. For a crash PC/LR:
+Copy your ROM into the repository folder and name it `earthbound.sfc`:
 
 ```bash
-unzip example-v1.0.0-debug.zip
-arm-none-eabi-addr2line -e example_core.elf -f -C -a 0x<PC> 0x<LR>
+cp /path/to/your/EarthBound.sfc ./earthbound.sfc
 ```
 
-Needs `arm-none-eabi-addr2line` on `PATH`, or the `sylverb/retro-go-sd-builder`
-Docker image. From a repo checkout you can also use
-`python3 scripts/resolve_addr.py --elf …` — see the README inside the debug zip.
+Or leave it where it is and pass `EARTHBOUND_SFC=/path/to/your/EarthBound.sfc` to every `make` command below.
 
-## ABI compatibility
-
-Cores and homebrews embed `required_abi_version` and `required_abi_min_size`
-(from `GW_CORE_BUILT_ABI_*` in the bridge). The firmware refuses to load a
-binary that asks for a newer/larger ABI than it provides.
-
-See `SDK_VERSION` for the snapshot this tree was cut from. After a released
-ABI:
-
-- **Append** a new function pointer at the end of `gw_firmware_abi_t` →
-  usually no version bump; `required_abi_min_size` grows.
-- **Change a ctl signature** or remove/reorder fields → bump
-  `GW_FIRMWARE_ABI_VERSION`.
-- **Add a new ctl op** without changing the C signature → bump version (or
-  another capability flag) so binaries that need the op can require it.
-
-While developing against unreleased firmware you may rebuild firmware +
-binaries together without bumping.
-
-## Refreshing the SDK from firmware
-
-If you maintain this tree alongside a firmware checkout:
+### 4. Build
 
 ```bash
-./scripts/sync_from_firmware.sh /path/to/game-and-watch-retro-go-sd
+make -j8
 ```
 
-That re-copies headers (including `appid.h`, `gwhb.h`), bridge sources,
-linker scripts, `pack_core.py`, and `pack_homebrew.py`. Review the diff
-before committing.
-
-From the firmware repo you can run the same sync in the other direction:
+If `arm-none-eabi-gcc` isn't on your `PATH`, point `make` at it. On macOS with the default install location, that looks like:
 
 ```bash
-./scripts/sync_to_core_template.sh [/path/to/retro-go-sd-templates]
+make -j8 GCC_PATH=/Applications/ArmGNUToolchain/15.3.rel2/arm-none-eabi/bin
 ```
 
-## License
+The first build takes a few minutes: it sets up a private Python environment and extracts the game's assets from your ROM. Later builds are much faster.
 
-Build glue and the template are MIT (see `LICENSE`). Vendored files under
-`sdk/include/` keep their upstream licenses (firmware / HAL / FatFs / etc.).
+When it finishes you'll have 2 new files in the repository folder:
+
+| File | Size | What it is |
+| --- | --- | --- |
+| `EarthBound.bin` | ~370 KB | The game's code |
+| `earthbound.ro` | ~3.8 MB | Game data extracted from your ROM, plus data the code needs to start up |
+
+**The 2 files are a matched pair.** Always copy both from the same build. An `EarthBound.bin` paired with an `earthbound.ro` from a different build will crash at launch.
+
+## Installing
+
+Both files go in the `/homebrews/` folder at the root of the SD card.
+
+**With a card reader:** power the Game & Watch off, take out the SD card, put it in your computer, create a `homebrews` folder at the top level if there isn't one, and copy `EarthBound.bin` and `earthbound.ro` into it.
+
+**With a debug probe and gnwmanager:** plug the Game & Watch in and run:
+
+```bash
+make sdpush
+```
+
+(Add the same `GCC_PATH=...` you used for building.)
+
+Then on the Game & Watch, open the launcher, go to the **Homebrew** tab and pick **EarthBound**.
+
+## Playing
+
+### Controls
+
+| Game & Watch | EarthBound |
+| --- | --- |
+| D-pad | Move |
+| A | Talk / check, confirm, advance text |
+| B | Cancel / back; shows everyone's HP and PP while walking around |
+| GAME | Town map |
+| TIME | Show/hide the performance overlay |
+| PAUSE/SET | Retro-Go menu (savestates, volume, brightness, quit) |
+| POWER | Save and sleep |
+
+### Saving
+
+There are 3 independent ways your progress is kept:
+
+- **In-game saves** (call Dad from a phone, as in the original) are written straight to the SD card.
+- **Savestates** from the PAUSE/SET menu snapshot the game at any moment, like an emulator's savestates. Most moments work. While a text box is waiting for you to press a button, a savestate can't be taken, and a "SAVESTATE FAIL" notice appears instead; press through the text and try again.
+- **POWER** saves a savestate and puts the Game & Watch to sleep. Press POWER again to wake up right where you were. The save is written to the SD card before the device sleeps, so it also survives the battery running flat: the next time the Game & Watch powers on, it resumes from that save.
+
+### Performance
+
+Quiet scenes run at the original's 60 fps. Busy scenes (lots of sprites, big battle backgrounds) run slower than the original; the game slows down a little there while the music keeps playing at the correct tempo. Press TIME to see the frame rate.
+
+## Troubleshooting
+
+**"EarthBound ROM not found" during the build.** The build couldn't find `earthbound.sfc` in the repository folder. Check the file name (all lowercase, `.sfc`), or pass `EARTHBOUND_SFC=/full/path/to/rom.sfc`.
+
+**"arm-none-eabi-gcc: command not found" or "No such file or directory" mentioning `arm-none-eabi`.** The toolchain isn't installed or isn't on your `PATH`; see step 4.
+
+**`external/earthbound` is empty, or the build complains about missing files in it.** The submodule wasn't downloaded: run `git submodule update --init --recursive`.
+
+**A blue error screen (BSOD) right after launching EarthBound.** Most often `EarthBound.bin` and `earthbound.ro` come from different builds. Copy both again from the same build.
+
+**A blue error screen saying "unable to open logo file" when the Game & Watch starts.** That's the firmware, before EarthBound runs: it was flashed without its SD-card files. Re-flash the firmware with `make flash_sd` (in the firmware repository) instead of `make flash`.
+
+**EarthBound doesn't appear in the Homebrew tab.** Check that both files are in `/homebrews/` (with an `s`), and that your firmware is from the `external_cores` branch.
+
+**The launcher refuses to start EarthBound** (for example with an ABI or version error). EarthBound needs a newer Retro-Go SD build than the one installed. Update the firmware from the `external_cores` branch.
+
+## Sharing
+
+Please don't share `earthbound.ro`, or a ROM. It contains data extracted from the game, which is why each person builds their own from their own ROM. Sharing links to this repository is fine.
+
+## For developers
+
+`CLAUDE.md` has the technical notes: how the build packs the game into the Game & Watch's memory, the rules for the `earthbound.ro` data file, debugging and profiling tips, and how to update the vendored Retro-Go SD SDK under `sdk/`.
+
+## Credits
+
+- [EarthBound C port and disassembly](https://github.com/BrianPugh/earthbound), which does the real work of running the game.
+- [Retro-Go SD](https://github.com/sylverb/game-and-watch-retro-go-sd) by sylverb and contributors: the Game & Watch firmware, launcher and homebrew SDK this builds on.
+- EarthBound is © Nintendo / APE / HAL Laboratory. This project is not affiliated with or endorsed by Nintendo.
