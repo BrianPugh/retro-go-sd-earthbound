@@ -51,8 +51,13 @@ PACKED_BIN=build/x/EarthBound.bin`) to keep its own sidecar.
 (extracted from its own ELF) and BSODs with "unable to open logo file"
 without it: flash with `make -C <firmware> flash_sd`, not just `flash`.
 It builds no cores in-tree, so `/cores/*.bin` left by another firmware stay
-stale. Stop any `gnwmanager gdbserver` before `make sdpush` (they fight over
-the probe).
+stale. Stop any `gnwmanager gdbserver` or `monitor` before `make sdpush`
+(they fight over the probe). `make sdpush` doesn't reload a running EB:
+exit to the launcher and relaunch.
+
+**Logs.** This repo has no `make monitor`. EB's `printf` goes to the
+firmware's log buffer: `gnwmanager monitor --elf <firmware>/build/gw_retro_go.elf`
+(the ELF of the flashed firmware).
 
 **Stock firmware only.** EB must run on stock `external_cores` firmware;
 don't add code that needs new ABI fields. Video renders into `eb_fb3` and
