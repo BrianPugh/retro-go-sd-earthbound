@@ -16,9 +16,10 @@
  *                         RAM_EMU alongside the triple buffer and the audio
  *                         heap, and the SDK forbids AHB segments. All are
  *                         CPU-only (no DMA). The loader zeroes the span.
- *   RODATA   (sidecar)    the decomp's .rodata* + the ~3 MB of ROM assets,
- *                         linked at a sentinel VMA and extracted to
- *                         earthbound.ro. At boot main_earthbound.c caches it
+ *   RODATA   (sidecar)    the decomp's .rodata*, linked at a sentinel VMA
+ *                         and extracted to earthbound.ro. (The ROM assets
+ *                         are a separate file, earthbound_assets.dat, which
+ *                         main_earthbound.c indexes at boot.) At boot main_earthbound.c caches it
  *                         into QSPI and PatchCodeRodataOffset rewrites every
  *                         RAM_EMU word inside the sentinel range to the
  *                         runtime address, skipping the main_earthbound.o
@@ -137,7 +138,6 @@ SECTIONS
   {
     . = ALIGN(4);
     __rodata_earthbound_start__ = .;
-    *embedded_assets_array.o (.rodata_assets)
     *(.rodata .rodata*)
     __rodata_earthbound_end__ = .;
   } >RODATA :rodata

@@ -10,9 +10,11 @@
  *   1. Cache the rodata sidecar (earthbound.ro, next to this .bin) from SD
  *      into the extflash cache.
  *   2. Run PatchCodeRodataOffset to fix up pointer tables (which the build
- *      placed in .noreloc → RAM via EB_NORELOC and EBASSET_TABLE_ATTR).
- *   3. Initialize odroid_system (appid, audio sample rate, savestate hooks).
- *   4. Hand control to upstream.
+ *      placed in .noreloc → RAM via EB_NORELOC).
+ *   3. Cache the asset pack (earthbound_assets.dat) the same way and index
+ *      it into embedded_assets[].
+ *   4. Initialize odroid_system (appid, audio sample rate, savestate hooks).
+ *   5. Hand control to upstream.
  */
 
 #include <odroid_system.h>
@@ -35,6 +37,7 @@
 #include "main_earthbound.h"
 
 #include "game_main.h"   /* host_request_capture/load/status — native savestate engine */
+#include "embedded_assets.h"
 
 #include "gw_core_bridge.h"   /* last — rewrites ACTIVE_FILE / common_emu_state */
 
@@ -54,8 +57,9 @@ extern uint32_t __RAM_EMU_START__;
 extern void *__rodata_earthbound_start__[];
 extern void *__rodata_earthbound_end__[];
 
-/* The sidecar sits next to the launched .bin (/homebrews/ today). */
+/* The sidecars sit next to the launched .bin (/homebrews/ today). */
 #define EB_RODATA_FILENAME "earthbound.ro"
+#define EB_ASSETS_FILENAME "earthbound_assets.dat"
 
 /* PatchCodeRodataOffset — rewrites every RAM_EMU pointer into
  * .rodata_earthbound from its sentinel link VMA to the runtime address where
@@ -99,6 +103,47 @@ static void PatchCodeRodataOffset(uint8_t *rodata, uint32_t file_length)
         *(uint32_t *)(ram_emu + table[2 + i]) += offset;
         if ((i & 1023) == 0)
             wdog_refresh();
+    }
+}
+
+/* The ROM assets, indexed at boot. ebtools' build linked this table against
+ * INCBIN'd files; here the files come from earthbound_assets.dat (built from
+ * the user's ROM by scripts/eb_assets.py pack, or the web installer's
+ * converter), so EarthBound.bin itself builds without the ROM. */
+AssetEntry embedded_assets[ASSET_COUNT];
+
+#define EB_ASSETS_MAGIC 0x31414245u /* "EBA1" */
+
+typedef struct {
+    uint32_t magic;
+    uint32_t count;
+    uint32_t layout_crc;   /* CRC32 of src/gen/eb_asset_list.txt */
+    uint32_t length;
+    struct { uint32_t offset, size; } entries[];
+} eb_assets_header_t;
+
+static void eb_assets_load(const uint8_t *dat, uint32_t file_length)
+{
+    const eb_assets_header_t *hdr = (const eb_assets_header_t *)dat;
+    printf("eb assets = %p length = %lu\n", dat, (unsigned long)file_length);
+
+    assert(dat != NULL && "earthbound_assets.dat is missing: build it from your ROM");
+    assert(file_length >= sizeof(*hdr) && hdr->magic == EB_ASSETS_MAGIC &&
+           hdr->length == file_length && "earthbound_assets.dat is corrupt");
+    /* An asset pack built for a different EarthBound.bin (another asset list)
+     * would hand every id the wrong file. */
+    assert(hdr->count == ASSET_COUNT && hdr->layout_crc == EB_ASSET_LAYOUT_CRC &&
+           "earthbound_assets.dat doesn't match this EarthBound.bin: rebuild it");
+    assert(sizeof(*hdr) + ASSET_COUNT * sizeof(hdr->entries[0]) <= file_length &&
+           "earthbound_assets.dat is corrupt");
+
+    for (uint32_t i = 0; i < ASSET_COUNT; i++) {
+        uint32_t offset = hdr->entries[i].offset;
+        uint32_t size = hdr->entries[i].size;
+        assert(offset <= file_length && size <= file_length - offset &&
+               "earthbound_assets.dat is corrupt");
+        embedded_assets[i].data = dat + offset;
+        embedded_assets[i].size_ptr = (const unsigned int *)&hdr->entries[i].size;
     }
 }
 
@@ -264,8 +309,8 @@ int app_main_earthbound(uint8_t load_state, uint8_t start_paused, int8_t save_sl
      * (force-blank frames, transitions, etc.). */
     lcd_clear_buffers();
 
-    /* Cache the rodata blob (3 MB of INCBIN'd assets + compiled const tables)
-     * from SD into the extflash round-robin cache. */
+    /* Cache the rodata blob (compiled const tables) from SD into the
+     * extflash round-robin cache. */
     char eb_rodata_path[256];
     snprintf(eb_rodata_path, sizeof(eb_rodata_path), "%s/" EB_RODATA_FILENAME,
              rg_dirname(ACTIVE_FILE->path));
@@ -281,6 +326,18 @@ int app_main_earthbound(uint8_t load_state, uint8_t start_paused, int8_t save_sl
      * (not raw RAM), and load applies on top of this freshly-patched boot, so no
      * rodata re-stamping is needed on resume — this one pass is sufficient. */
     PatchCodeRodataOffset(eb_rodata, eb_rodata_length);
+
+    /* The ~3.8 MB of ROM assets, cached the same way. */
+    char eb_assets_path[256];
+    snprintf(eb_assets_path, sizeof(eb_assets_path), "%s/" EB_ASSETS_FILENAME,
+             rg_dirname(ACTIVE_FILE->path));
+    uint32_t eb_assets_length = 0;
+    uint8_t *eb_assets = odroid_overlay_cache_file_in_flash(
+        eb_assets_path, &eb_assets_length, false);
+    if (eb_assets == NULL) {
+        printf("Missing %s file\n", eb_assets_path);
+    }
+    eb_assets_load(eb_assets, eb_assets_length);
 
     odroid_system_init(APPID_HOMEBREW, EB_AUDIO_SAMPLE_RATE);
     odroid_system_emu_init(&eb_LoadState, &eb_SaveState, &Screenshot,

@@ -1,17 +1,21 @@
 # EarthBound — Retro-Go SD GWHB homebrew.
 #
-#   make                  — build + pack EarthBound.bin (+ earthbound.ro sidecar)
-#   make sdpush           — push both to /homebrews/ on the device (gnwmanager)
+#   make                  — build + pack EarthBound.bin (+ earthbound.ro sidecar),
+#                           and earthbound_assets.dat when the ROM is present
+#   make sdpush           — push all three to /homebrews/ on the device (gnwmanager)
+#   make gen-headers      — regenerate the committed src/gen/ asset headers
+#                           (after a submodule bump; needs the ROM)
 #   make docker           — same build inside Docker (no host toolchain)
 #   make docker_shell     — interactive shell in the builder image
 #
-# Needs the donor ROM (US EarthBound) at ./earthbound.sfc, or pass
-# EARTHBOUND_SFC=/path/to/earthbound.sfc. Assets are extracted from it at
-# build time; neither the ROM nor anything derived from it is committed.
+# EarthBound.bin and earthbound.ro build without the ROM. The asset pack
+# needs the donor ROM (US EarthBound) at ./earthbound.sfc, or pass
+# EARTHBOUND_SFC=/path/to/earthbound.sfc. Neither the ROM nor the asset pack
+# is committed; src/gen/ holds only the asset ids the code compiles against.
 #
-# Sidecars on SD (not in the GWHB):
-#   /homebrews/earthbound.ro  — rodata: compiled const tables + ROM assets
-#                               (written next to PACKED_BIN)
+# Sidecars on SD (not in the GWHB), all written next to PACKED_BIN:
+#   /homebrews/earthbound.ro           — rodata: compiled const tables
+#   /homebrews/earthbound_assets.dat   — ROM assets (scripts/eb_assets.py)
 #
 # Verbose compiler lines: make V=
 
@@ -28,7 +32,10 @@ PACKED_BIN := EarthBound.bin
 # rule), so it's written next to PACKED_BIN: a second build config with its own
 # PACKED_BIN=build/x/EarthBound.bin gets its own build/x/earthbound.ro.
 RO_BIN     := $(patsubst ./%,%,$(dir $(PACKED_BIN))earthbound.ro)
+# SIDECARS are published beside the .bin; the asset pack is ROM-derived, so
+# it never is (a user builds it from their own ROM).
 SIDECARS   := $(RO_BIN)
+ASSETS_DAT := $(patsubst ./%,%,$(dir $(PACKED_BIN))earthbound_assets.dat)
 HB_NAME    := EarthBound
 
 # Relative path so Docker bind-mounts work (do NOT use $(abspath)).
@@ -69,18 +76,16 @@ src/gw_debug.c \
 src/gw_save.c \
 src/gw_savestate.c
 
-# embedded_assets_array.c is generated, so it gets an explicit rule below
-# instead of going through the SDK's vpath-based %.o: %.c rule.
 CORE_C_SOURCES := $(EARTHBOUND_C_SOURCES) $(PORT_C_SOURCES)
 
 CORE_C_INCLUDES := \
 -Isrc \
+-Isrc/gen \
 -I$(CORE_EARTHBOUND)/src \
 -I$(CORE_EARTHBOUND)/src/vendor/tamp/tamp/_c_src \
 -I$(CORE_EARTHBOUND)/src/include \
 -I$(CORE_EARTHBOUND)/src/vendor/incbin \
--I$(CORE_EARTHBOUND)/src/vendor/lakesnes/snes \
--I$(EARTHBOUND_GEN_DIR)
+-I$(CORE_EARTHBOUND)/src/vendor/lakesnes/snes
 
 #######################################
 # Build knobs
@@ -122,16 +127,12 @@ OPT ?= -O2
 
 CORE_LDSCRIPT := src/earthbound_core.ld
 
-# Set before the include: the SDK's link rule expands it as a prerequisite.
-CORE_EXTRA_OBJECTS := $(BUILD_DIR)/embedded_assets_array.o
-
 include $(GNW_CORE_SDK)/Makefile
 
 # Firmware-matching codegen flags for the EB objects, plus the bump-allocator
 # override (force-included only into EB/port objects: the SDK bridge defines
 # malloc itself).
-EB_OBJECTS := $(addprefix $(BUILD_DIR)/,$(notdir $(CORE_C_SOURCES:.c=.o))) \
-              $(BUILD_DIR)/embedded_assets_array.o
+EB_OBJECTS := $(addprefix $(BUILD_DIR)/,$(notdir $(CORE_C_SOURCES:.c=.o)))
 EB_CFLAGS := \
 -falign-functions -falign-jumps -fmerge-all-constants \
 -include src/eb_alloc.h \
@@ -157,9 +158,14 @@ $(BUILD_DIR)/state_dump.o: OPT := -Os
 LDFLAGS += -Wl,--emit-relocs
 
 #######################################
-# Asset generation (donor ROM → embedded_assets_*)
+# Asset generation (donor ROM → earthbound_assets.dat)
 #######################################
 EARTHBOUND_SFC ?= earthbound.sfc
+
+# Committed, ROM-free: the asset ids, item/music enums, and the asset list
+# that fixes the .dat layout (scripts/eb_assets.py).
+EB_GEN_HEADERS := $(wildcard src/gen/*.h)
+$(EB_OBJECTS): $(EB_GEN_HEADERS)
 
 EARTHBOUND_GEN_HEADERS := \
 	$(EARTHBOUND_GEN_DIR)/embedded_assets.h \
@@ -170,9 +176,6 @@ EARTHBOUND_GEN_HEADERS := \
 EARTHBOUND_HEADERS_EXTRA := \
 	$(EARTHBOUND_GEN_DIR)/items_generated.h \
 	$(EARTHBOUND_GEN_DIR)/music_generated.h
-
-# Every EB object may include a generated header.
-$(EB_OBJECTS): $(EARTHBOUND_GEN_HEADERS) $(EARTHBOUND_HEADERS_EXTRA)
 
 $(EARTHBOUND_GEN_DIR):
 	$(V)mkdir -p $@
@@ -217,14 +220,15 @@ $(EARTHBOUND_ASSETS_MANIFEST): $(CORE_EARTHBOUND)/earthbound.sfc $(CORE_EARTHBOU
 EARTHBOUND_EBTOOLS_PY := $(shell find $(CORE_EARTHBOUND)/ebtools -name '*.py' 2>/dev/null)
 
 # Mirrors external/earthbound/src/CMakeLists.txt. pack-all also writes
-# text_refs.h into src/data/ (the C port includes "data/text_refs.h"); both
-# dir flags spell out pack-all's defaults for src/assets.
+# text_refs.h, the dialogue offsets the code compiles in; upstream commits it
+# in src/data/, so it goes to the gen dir and `eb_assets.py check` compares
+# the two (writing src/data/ would also race the compile under -j).
 $(EARTHBOUND_GEN_HEADERS) &: $(EARTHBOUND_ASSETS_MANIFEST) $(CORE_EARTHBOUND)/commondefs.yml $(EARTHBOUND_EBTOOLS_PY) $(wildcard $(CORE_EARTHBOUND)/src/custom_assets/maps/*.json) Makefile | $(EARTHBOUND_GEN_DIR)
 	@echo "[ ebtools pack-all ]"
 	@cd $(CORE_EARTHBOUND) && . .venv/bin/activate && ebtools pack-all \
 		src/assets $(abspath $(EARTHBOUND_PACKED_DIR)) \
 		-b asm/bin -y earthbound.yml -c commondefs.yml \
-		--text-refs-dir src/data \
+		--text-refs-dir $(abspath $(EARTHBOUND_GEN_DIR)) \
 		--custom-dir src/custom_assets
 	@echo "[ ebtools embed-registry ]"
 	@cd $(CORE_EARTHBOUND) && . .venv/bin/activate && ebtools embed-registry \
@@ -256,17 +260,24 @@ $(EARTHBOUND_GEN_HEADERS) &: $(EARTHBOUND_ASSETS_MANIFEST) $(CORE_EARTHBOUND)/co
 		--exclude "data/compressed_text_ptrs.bin" \
 		$(foreach f,$(EARTHBOUND_RAW_FAMILIES),--exclude "$(f)/*.lzhal" --exclude "US/$(f)/*.lzhal")
 
-# INCBIN_OUTPUT_SECTION routes the ~3 MB of asset bytes into .rodata_assets
-# (caught by .rodata_earthbound in src/earthbound_core.ld and extracted to
-# earthbound.ro); EBASSET_TABLE_ATTR places the embedded_assets[] index in
-# .noreloc (RAM) so PatchCodeRodataOffset can fix its pointers at boot.
-$(BUILD_DIR)/embedded_assets_array.o: $(EARTHBOUND_GEN_DIR)/embedded_assets_array.c $(REDEFINE_SYMS_FILE) | $(BUILD_DIR)
-	$(V)$(ECHO) [ CC ] $(notdir $<)
-	$(V)$(CC) -c $(CFLAGS) \
-		-DINCBIN_OUTPUT_SECTION='".rodata_assets"' \
-		-DEBASSET_TABLE_ATTR='__attribute__((section(".noreloc")))' \
-		$< -o $@
-	$(V)$(CP) --redefine-syms=$(REDEFINE_SYMS_FILE) $@
+# The asset pack: ebtools' packed files in src/gen/eb_asset_list.txt order.
+# `check` fails when the committed list no longer matches this submodule.
+EB_ASSET_LIST := src/gen/eb_asset_list.txt
+$(ASSETS_DAT): $(EARTHBOUND_GEN_HEADERS) $(EARTHBOUND_HEADERS_EXTRA) $(EB_ASSET_LIST) scripts/eb_assets.py
+	$(V)$(ECHO) [ ASSETS ] $(ASSETS_DAT)
+	$(V)python3 scripts/eb_assets.py check --gen-dir $(EARTHBOUND_GEN_DIR) \
+		--eb-dir $(CORE_EARTHBOUND) --out-dir src/gen
+	$(V)mkdir -p $(dir $@)
+	$(V)python3 scripts/eb_assets.py pack --list $(EB_ASSET_LIST) \
+		--packed-dir $(EARTHBOUND_PACKED_DIR) --bin-dir $(CORE_EARTHBOUND)/asm/bin \
+		--out $@
+
+.PHONY: assets gen-headers
+assets: $(ASSETS_DAT)
+
+gen-headers: $(EARTHBOUND_GEN_HEADERS) $(EARTHBOUND_HEADERS_EXTRA)
+	$(V)python3 scripts/eb_assets.py gen-headers --gen-dir $(EARTHBOUND_GEN_DIR) \
+		--eb-dir $(CORE_EARTHBOUND) --out-dir src/gen
 
 #######################################
 # Pack (+ extract .rodata_earthbound sidecar)
@@ -317,14 +328,20 @@ pack: $(TARGET_BIN) $(RO_BIN) $(COVER_JPG) $(RELOC_CHECK)
 
 all: pack
 
-# Push the packed binary and its sidecar to the device's SD card.
+# The asset pack only when there's a ROM to build it from (CI has none).
+ifneq ($(wildcard $(EARTHBOUND_SFC)),)
+all: assets
+endif
+
+# Push the packed binary and its sidecars to the device's SD card.
 GNWMANAGER ?= gnwmanager
-sdpush: pack
+sdpush: pack assets
 	$(GNWMANAGER) \
 		sdpush --file "$(PACKED_BIN)" --dest-path "/homebrews/" \
-		-- sdpush --file "$(RO_BIN)" --dest-path "/homebrews/"
+		-- sdpush --file "$(RO_BIN)" --dest-path "/homebrews/" \
+		-- sdpush --file "$(ASSETS_DAT)" --dest-path "/homebrews/"
 
-.PHONY: print-PROJECT_KIND print-PACKED_BIN print-SIDECARS print-RO_BIN print-CORE_NAME \
+.PHONY: print-PROJECT_KIND print-PACKED_BIN print-SIDECARS print-ASSETS_DAT print-RO_BIN print-CORE_NAME \
 	print-DOCKER_IMAGE print-TARGET_ELF print-TARGET_MAP print-CORE_VERSION
 print-PROJECT_KIND:
 	@echo $(PROJECT_KIND)
@@ -332,6 +349,8 @@ print-PACKED_BIN:
 	@echo $(PACKED_BIN)
 print-SIDECARS:
 	@echo $(SIDECARS)
+print-ASSETS_DAT:
+	@echo $(ASSETS_DAT)
 print-RO_BIN:
 	@echo $(RO_BIN)
 print-CORE_NAME:
@@ -346,7 +365,7 @@ print-CORE_VERSION:
 	@echo $(CORE_VERSION)
 
 clean::
-	$(V)rm -f "$(PACKED_BIN)" $(RO_BIN)
+	$(V)rm -f "$(PACKED_BIN)" $(RO_BIN) $(ASSETS_DAT)
 
 #######################################
 # Docker (same image as firmware repo)
