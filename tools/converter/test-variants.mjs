@@ -73,6 +73,17 @@ if (output) {
     `${declared.tool.maxOutputBytes} < ${datLength}`);
 }
 
+// The module labels its output with the manifest's id (spec 04-processor), and
+// the page must expect that id. zelda3's page, which ours is vendored from,
+// expects filenames because zelda3's module emits one; v0.1.0 shipped that.
+const moduleId = /pub const OUTPUT_ID: &str = "([^"]*)"/
+  .exec(readFileSync(join(here, "src", "lib.rs"), "utf8"))?.[1];
+check("module's output id is the one gwrg.json declares", moduleId === output?.id,
+  `lib.rs ${moduleId} vs gwrg.json ${output?.id}`);
+const app = readFileSync(join(repo, "tools", "page", "page", "app.js"), "utf8");
+check("page expects output ids, not filenames",
+  app.includes("expectedOutputs: state.tool.outputs.map((o) => o.id)"));
+
 // --- the page's reference run -----------------------------------------------
 
 const refPath = join(repo, "tools", "page", "reference.json");

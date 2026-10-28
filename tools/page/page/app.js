@@ -861,6 +861,12 @@ async function run() {
       return;
     }
 
+    // From here on an output is known by the file name it goes on the card as.
+    // extract.mjs has already checked the ids against the manifest.
+    for (const out of m.outputs) {
+      out.name = state.tool.outputs.find((o) => o.id === out.name).filename;
+    }
+
     // The manifest states a ceiling per output as well as one for the run as a
     // whole, and a host is expected to hold the module to both. The tool-level
     // ceiling is enforced inside the worker; this is the per-output one.
@@ -880,7 +886,9 @@ async function run() {
     // No flags. Admission is settled before the run, by `strict` above, and
     // an option a project declares would be read from the manifest.
     flags: 0,
-    expectedOutputs: state.tool.outputs.map((o) => o.filename),
+    // A module labels its outputs with the manifest's output ids; the file
+    // names come from the manifest (spec 04-processor).
+    expectedOutputs: state.tool.outputs.map((o) => o.id),
     maxOutputBytes: state.tool.limits?.maxOutputBytes,
   });
 }
