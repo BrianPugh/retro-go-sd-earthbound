@@ -107,9 +107,8 @@ CORE_C_DEFS := \
 -DEB_HAVE_SAVESTATE_BACKEND=1 \
 -DTAMP_STREAM=0
 
-# Extra -D flags from the command line, e.g. the EB_GW_ABI_* switches that
-# turn on the paths needing firmware ABI appends:
-#   make EB_EXTRA_DEFS="-DEB_GW_ABI_TB_PRESENT=1 -DEB_GW_ABI_FATFS_FILES=1"
+# Extra -D flags from the command line, e.g.
+#   make EB_EXTRA_DEFS="-DEB_PPU_PROFILE=1"
 EB_EXTRA_DEFS ?=
 CORE_C_DEFS += $(EB_EXTRA_DEFS)
 

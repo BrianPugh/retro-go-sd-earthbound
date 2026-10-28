@@ -134,9 +134,9 @@ static bool eb_LoadState(const char *savePathName)
     return true;
 }
 
-/* TODO(eb-gwhb): the firmware's POWER path calls this with slot -1 and then
+/* TODO: the firmware's POWER path calls this with slot -1 and then
  * enters STOP2 immediately, so the requested capture only lands after wake.
- * Phase 3: make the slot -1 save synchronous (free-run to the root boundary
+ * Make the slot -1 save synchronous (free-run to the root boundary
  * inside this callback). */
 static bool eb_SaveState(const char *savePathName)
 {
@@ -270,15 +270,9 @@ int app_main_earthbound(uint8_t load_state, uint8_t start_paused, int8_t save_sl
      * gw_input.c's platform_input_poll() calls every frame — and trips
      * pause_pressed, opening the pause menu, which mutes/unmutes audio itself.
      *
-     * We deliberately do NOT odroid_audio_mute(true) here (zelda3/smw do). EB's
-     * SAI ISR refill stops advancing the ring's consumer tail while muted
-     * (gw_audio.c: eb_audio_dma_refill honors audio_mute), which is only safe when
-     * the producer is frozen — true inside the modal pause menu, but NOT during
-     * these lead-in frames where the game loop (and eb_audio_pump) still runs. A
-     * pre-mute there fills the ring and then deadlocks eb_audio_pump in its WFI
-     * wait for a slot the muted ISR never frees (a watchdog-refreshing hang). The
-     * lead-in is fresh-boot frames (APU silent), so leaving audio unmuted costs no
-     * audible blip; the pause menu mutes safely once it opens.
+     * We don't odroid_audio_mute(true) here (zelda3/smw do): the lead-in is
+     * fresh-boot frames (APU silent), so leaving audio unmuted costs no audible
+     * blip, and the pause menu mutes once it opens.
      *
      * Unlike zelda3/smw (which load synchronously above the frame loop and so can
      * arm the pause immediately), EB's load was only QUEUED above and is applied

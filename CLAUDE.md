@@ -50,11 +50,14 @@ build config overwrites the first one's sidecar.
 without it: flash with `make -C <firmware> flash_sd`, not just `flash`.
 It builds no cores in-tree, so `/cores/*.bin` left by another firmware stay
 stale. Stop any `gnwmanager gdbserver` before `make sdpush` (they fight over
-the probe). The default build (all `EB_GW_ABI_*` = 0) is the shipping
-target: stay compatible with stock `external_cores` firmware. It renders
-into `eb_fb3` and copies into the launcher buffer before `lcd_swap()`, which
-avoids the 60 Hz quantization of plain double buffering (that ran ~20 fps)
-at the cost of a 150 KiB copy per frame; the fork's triple buffering ran ~28.
+the probe).
+
+**Stock firmware only.** EB must run on stock `external_cores` firmware;
+don't add code that needs new ABI fields. Video renders into `eb_fb3` and
+copies into the launcher buffer before `lcd_swap()`, which avoids the 60 Hz
+quantization of plain double buffering (that ran ~20 fps); the copy costs
+well under 1 ms (a DMA2D copy measured no faster). Savestates use newlib
+stdio, and the audio ring is drained by polling `dma_counter`.
 
 **Memory layout** (`src/earthbound_core.ld`, comment at the top explains it):
 RAM_EMU holds code + `.bss` and must leave ≥ 74 KB for the `ram_malloc`
@@ -68,24 +71,10 @@ patched. A const table that points into `.rodata` must be `EB_NORELOC`.
 `scripts/check_eb_rodata_relocs.py` runs before packing and fails the build
 (deleting the ELF) when one slips through.
 
-**ABI feature flags.** Code that needs firmware ABI additions that aren't
-upstream yet is behind flags defaulting to 0, marked `TODO(eb-gwhb)`, with a
-stand-in path that works on stock `external_cores`. Set them with
-`EB_EXTRA_DEFS` (passed to `CORE_C_DEFS`):
-
-| Flag | Needs firmware with | Stand-in when 0 |
-| --- | --- | --- |
-| `EB_GW_ABI_TB_PRESENT` | `lcd_present_at_vblank` + `common_ingame_overlay_to` | render to `eb_fb3`, copy, `lcd_swap()` |
-| `EB_GW_ABI_FATFS_FILES` | `f_open`/`f_read`/`f_write`/`f_lseek`/`f_sync`/`f_close` | newlib stdio savestates |
-| `EB_GW_ABI_AUDIO_REFILL` | SAI-ISR refill callback (no firmware branch yet) | ring drained by polling `dma_counter` |
-
-```bash
-make BUILD_DIR=build/abi PACKED_BIN=build/abi/EarthBound.bin \
-     EB_EXTRA_DEFS="-DEB_GW_ABI_TB_PRESENT=1 -DEB_GW_ABI_FATFS_FILES=1"
-```
-
-A flag set to 1 only links when `sdk/` was synced from a firmware tree that
-has those ABI fields.
+**Profiling.** `EB_EXTRA_DEFS="-DEB_PPU_PROFILE=1"` adds per-phase PPU
+timings to the TIME-button FPS overlay. The phases time `ppu_render_frame`
+only; the present copy shows up in `PPU`. To A/B two builds, load the same
+savestate in each (saves are compatible across builds of the same EB code).
 
 **SDK sync gotchas.**
 - The bridge sets `required_abi_min_size = sizeof(gw_firmware_abi_t)`. Every

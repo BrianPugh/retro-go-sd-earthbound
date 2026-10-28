@@ -21,9 +21,8 @@
  *
  *   The ring fixes both. The producer (eb_audio_pump, once per game frame)
  *   pushes exactly one frame per call and never overwrites unconsumed data. The
- *   consumer (the SAI Tx ISR, via audio_set_dma_refill_callback) pops one frame
- *   per DMA half into the just-freed half — so the buffer stays fed even during
- *   a long render, and every produced frame plays exactly once in order. The
+ *   consumer (eb_audio_poll_refill) pops one frame per DMA half into the
+ *   just-freed half, so every produced frame plays exactly once in order. The
  *   ring depth provides the jitter slack the 2-half buffer lacked.
  *
  * Pacing: real-time, driven by ring fill level (replaces common_emu_sound_sync,
@@ -36,11 +35,15 @@
  * real-time rate. The game's visuals/logic slow under load while music keeps
  * correct tempo, rather than the ring draining to an underrun. If the ring does
  * empty anyway (a single op blocking the loop past the ring's depth, e.g. a
- * music-pack load), the ISR replays the last frame — see eb_audio_dma_refill.
+ * music-pack load), the consumer replays the last frame — see
+ * eb_audio_dma_refill.
  *
- * Concurrency: single producer (main loop, writes head), single consumer (SAI
- * ISR, writes tail). 32-bit aligned accesses are atomic on the M7; a DMB orders
- * the ring writes before the head publish. No lock needed.
+ * The firmware ABI has no SAI-ISR refill hook, so the consumer runs from the
+ * main loop: eb_audio_poll_refill() watches dma_counter and fills the DMA half
+ * that came free since the last call. The ring therefore only drains while the
+ * loop polls (pump wait loop, video waits), so a long render replays stale DMA
+ * halves instead of the ring absorbing it. Producer and consumer both run in
+ * the main loop, so the ring needs no locking.
  */
 
 #include <string.h>
@@ -55,13 +58,6 @@
 #include "porting/common.h"
 
 #include "gw_core_bridge.h"   /* last — rewrites dma_counter */
-
-/* Set once the firmware ABI exports audio_set_dma_refill_callback (and the
- * audio_mute flag it consults from the ISR). Until then the ring is drained
- * by polling from the main loop; see eb_audio_poll_refill(). */
-#ifndef EB_GW_ABI_AUDIO_REFILL
-#define EB_GW_ABI_AUDIO_REFILL 0
-#endif
 
 extern void wdog_refresh(void);
 /* gw_video.c — issues a deferred LCD present once the previous one latched. */
@@ -92,11 +88,11 @@ static int16_t eb_stereo_scratch[EB_AUDIO_SAMPLES_PER_FRAME * 2];
 
 /* Ring of fully-mixed (mono, volume-applied) frames. */
 static int16_t eb_ring[EB_RING_FRAMES][EB_AUDIO_SAMPLES_PER_FRAME];
-static volatile uint16_t eb_ring_head;  /* producer (main loop) writes */
-static volatile uint16_t eb_ring_tail;  /* consumer (SAI ISR) writes */
+static volatile uint16_t eb_ring_head;  /* producer (eb_audio_pump) writes */
+static volatile uint16_t eb_ring_tail;  /* consumer (eb_audio_poll_refill) writes */
 
-/* Diagnostic: DMA halves the ISR had to fill from a starved ring (see report
- * in eb_audio_pump). Written by the ISR, read by the main loop. */
+/* Diagnostic: DMA halves filled from a starved ring (see report in
+ * eb_audio_pump). */
 static volatile uint32_t eb_underrun_frames;
 
 /* Diagnostic: DWT cycles spent generating+mixing audio (excludes the WFI
@@ -110,8 +106,7 @@ static inline uint16_t eb_ring_count(void)
     return (uint16_t)(eb_ring_head - eb_ring_tail);
 }
 
-/* SAI Tx ISR refill: pop one frame into the just-freed DMA half. Kept tiny —
- * a single memcpy. On underrun (ring empty) replay the most recent frame
+/* Pop one frame into the just-freed DMA half. On underrun (ring empty) replay the most recent frame
  * instead of silence: a brief tempo hold is far less harsh than a click to
  * zero. The producer won't overwrite the (tail-1) slot until head laps all the
  * way around the ring, so it stays valid to replay. At startup that slot is
@@ -121,21 +116,6 @@ static void eb_audio_dma_refill(int16_t *dst, uint16_t samples)
     uint16_t n = (samples < EB_AUDIO_SAMPLES_PER_FRAME)
                  ? samples : EB_AUDIO_SAMPLES_PER_FRAME;
     const int16_t *src;
-
-    /* Honor the global mute, set by odroid_audio_mute() when the retro-go
-     * overlay/menu opens (and for volume/brightness chords). Standard ports go
-     * silent here for free: the menu zeroes the DMA buffer and, lacking a
-     * refill callback, it stays zeroed. EB *does* refill, so without this check
-     * the ISR keeps draining the ring and then drones the last frame on
-     * underrun while the menu is up. The producer (eb_audio_pump) is frozen in
-     * the modal menu, so the ring is left intact and playback resumes exactly
-     * where it paused once unmuted. */
-#if EB_GW_ABI_AUDIO_REFILL
-    if (audio_mute) {
-        memset(dst, 0, samples * sizeof(int16_t));
-        return;
-    }
-#endif
 
     if (eb_ring_head == eb_ring_tail) {
         eb_underrun_frames++;
@@ -150,13 +130,8 @@ static void eb_audio_dma_refill(int16_t *dst, uint16_t samples)
         memset(dst + n, 0, (samples - n) * sizeof(int16_t));
 }
 
-#if !EB_GW_ABI_AUDIO_REFILL
-/* TODO(eb-gwhb): stand-in for the SAI-ISR refill callback, which the firmware
- * ABI doesn't export. Pops at most one ring frame into the DMA half that came
- * free since the last call, from main-loop context. The ring therefore only
- * drains while the loop polls (pump wait loop, video waits), so a long render
- * replays stale DMA halves instead of the ring absorbing it. Phase 3: move to
- * pcm_attach (firmware-driven sample ring) or the refill-callback ABI append.
+/* Pops at most one ring frame into the DMA half that came free since the last
+ * call (see the file header).
  *
  * Mute: always pop (an undrained full ring would wedge eb_audio_pump), but
  * emit silence while the menu / volume-min mute is active. */
@@ -173,29 +148,19 @@ void eb_audio_poll_refill(void)
     if (common_emu_sound_loop_is_muted())
         memset(dst, 0, samples * sizeof(int16_t));
 }
-#else
-void eb_audio_poll_refill(void) {}
-#endif
 
 bool platform_audio_init(void)
 {
     eb_ring_head = 0;
     eb_ring_tail = 0;
     audio_init();
-#if EB_GW_ABI_AUDIO_REFILL
-    audio_set_dma_refill_callback(eb_audio_dma_refill);
-#else
     eb_dma_seen = dma_counter;
-#endif
     audio_start_playing(EB_AUDIO_SAMPLES_PER_FRAME);
     return true;
 }
 
 void platform_audio_shutdown(void)
 {
-#if EB_GW_ABI_AUDIO_REFILL
-    audio_set_dma_refill_callback(NULL);
-#endif
     audio_stop_playing();
     audio_shutdown();
 }
@@ -230,9 +195,6 @@ static void eb_produce_frame(void)
         }
     }
 
-    /* Publish: ensure the ring writes land before the head advance the ISR
-     * observes. */
-    __DMB();
     eb_ring_head++;
 
     eb_audio_prod_cycles += DWT->CYCCNT - _t0;
@@ -249,7 +211,7 @@ void eb_audio_pump(void)
     /* Real-time-paced production. Two regimes:
      *
      *   Keeping up (ring full): block for one freed slot, then produce exactly
-     *   one frame. The SAI ISR frees a slot every ~16.69 ms, so this is the
+     *   one frame. The SAI DMA frees a slot every ~16.69 ms, so this is the
      *   frame loop's pacing clock and the APU advances at 60 Hz — correct
      *   tempo, full double-buffer slack.
      *
@@ -272,7 +234,7 @@ void eb_audio_pump(void)
          * would otherwise block on in end_frame passes during this wait, so
          * the video and audio waits overlap instead of summing. */
         eb_video_service();
-        cpumon_sleep();  /* __WFI; wakes on the SAI ISR that frees a slot */
+        cpumon_sleep();  /* __WFI; wakes on the SAI DMA half-complete IRQ */
         eb_audio_poll_refill();
     }
     eb_video_service();
