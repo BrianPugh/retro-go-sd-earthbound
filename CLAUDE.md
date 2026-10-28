@@ -45,6 +45,15 @@ instructions collide with it (that corrupted the bridge `memcpy`). `earthbound.r
 written to the repo root, even with a different `BUILD_DIR`, so a second
 build config overwrites the first one's sidecar.
 
+**Hardware test.** Upstream `external_cores` firmware reads `/bios/logo.bin`
+(extracted from its own ELF) and BSODs with "unable to open logo file"
+without it: flash with `make -C <firmware> flash_sd`, not just `flash`.
+It builds no cores in-tree, so `/cores/*.bin` left by another firmware stay
+stale. Stop any `gnwmanager gdbserver` before `make sdpush` (they fight over
+the probe). The default build (all `EB_GW_ABI_*` = 0) runs ~20 fps where the
+fork ran ~28: `lcd_swap()` double-buffering quantizes frames to the 60 Hz
+refresh. That's expected; `EB_GW_ABI_TB_PRESENT=1` restores triple buffering.
+
 **Memory layout** (`src/earthbound_core.ld`, comment at the top explains it):
 RAM_EMU holds code + `.bss` and must leave ≥ 74 KB for the `ram_malloc`
 heap (lakesnes audio; link ASSERT). The cold entity/map_loader tables and
