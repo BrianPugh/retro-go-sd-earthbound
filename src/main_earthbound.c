@@ -256,8 +256,6 @@ void platform_root_boundary(void)
 
 int app_main_earthbound(uint8_t load_state, uint8_t start_paused, int8_t save_slot)
 {
-    (void)save_slot;
-
     printf("EarthBound start\n");
     /* ram_start is seeded past __CORE_BSS_END__ by the GWHB loader. */
 
@@ -288,13 +286,18 @@ int app_main_earthbound(uint8_t load_state, uint8_t start_paused, int8_t save_sl
     odroid_system_emu_init(&eb_LoadState, &eb_SaveState, &Screenshot,
                            NULL, NULL, &eb_SramSave, NULL);
 
-    /* Queue the launcher's "load slot at startup" (ODROID_PATH_SAVE_STATE) to be
-     * serviced at earthbound_main()'s first root-loop boundary (it free-runs
-     * in-process; no reboot). On a missing/invalid slot the load silently fails
-     * at the root boundary and the game falls through to a normal fresh start. */
+    /* Queue the launcher's "load slot at startup" to be serviced at
+     * earthbound_main()'s first root-loop boundary (it free-runs in-process; no
+     * reboot). save_slot follows odroid_system_emu_load_state(): -1 is the POWER
+     * safety save (off.sav, used by power-on resume), -2 means start from SRAM
+     * (EB's in-game save is already on SD, so that's a normal boot), and 0..3
+     * are the menu slots. On a missing/invalid slot the load silently fails at
+     * the root boundary and the game falls through to a normal fresh start. */
     bool load_queued = false;
-    if (load_state) {
-        char *p = odroid_system_get_path(ODROID_PATH_SAVE_STATE, ACTIVE_FILE->path);
+    if (load_state && save_slot != -2) {
+        int path_type = (save_slot == -1) ? ODROID_PATH_SAVE_STATE_OFF
+                                          : ODROID_PATH_SAVE_STATE + save_slot;
+        char *p = odroid_system_get_path(path_type, ACTIVE_FILE->path);
         if (p) {
             eb_savestate_set_base(p);
             load_queued = true;
