@@ -22,8 +22,9 @@ the default linker contract. This file is the memory + porting checklist.
 This tree builds EarthBound (`external/earthbound`, the C reimplementation)
 as a GWHB homebrew for the upstream firmware's `external_cores` branch
 (ABI v2). It replaces the firmware-fork integration (firmware PR #91,
-`earthbound` branch of game-and-watch-retro-go-sd, which stays the
-known-good hardware reference). The SDK template sections below still apply.
+`earthbound` branch of game-and-watch-retro-go-sd), which is being closed in
+favor of this repo: don't port changes back to it. The SDK template sections
+below still apply.
 
 **Build.** Needs the donor ROM at `./earthbound.sfc` (or
 `EARTHBOUND_SFC=...`), arm-none-eabi-gcc on `PATH` or `GCC_PATH=...`, and
