@@ -189,6 +189,21 @@ def cmd_check(args) -> None:
                  "the dialogue blob wouldn't match the offsets compiled into the binary.")
 
 
+def pack_dat(blobs: list[bytes], layout_crc: int) -> bytes:
+    """Assets in id order -> earthbound_assets.dat."""
+    offset = HEADER_SIZE + 8 * len(blobs)
+    table = bytearray()
+    body = bytearray()
+    for blob in blobs:
+        pad = -(offset + len(body)) % ALIGN
+        body += bytes(pad)
+        table += (offset + len(body)).to_bytes(4, "little") + len(blob).to_bytes(4, "little")
+        body += blob
+    total = offset + len(body)
+    header = b"".join(v.to_bytes(4, "little") for v in (MAGIC, len(blobs), layout_crc, total))
+    return bytes(header + table + body)
+
+
 def cmd_pack(args) -> None:
     layout = args.list.read_text().splitlines()
     crc = zlib.crc32(args.list.read_bytes())
@@ -199,18 +214,9 @@ def cmd_pack(args) -> None:
         kind, rel = entry.split("/", 1)
         blobs.append((roots[kind] / rel).read_bytes())
 
-    offset = HEADER_SIZE + 8 * len(blobs)
-    table = bytearray()
-    body = bytearray()
-    for blob in blobs:
-        pad = -(offset + len(body)) % ALIGN
-        body += bytes(pad)
-        table += (offset + len(body)).to_bytes(4, "little") + len(blob).to_bytes(4, "little")
-        body += blob
-    total = offset + len(body)
-    header = b"".join(v.to_bytes(4, "little") for v in (MAGIC, len(blobs), crc, total))
-    args.out.write_bytes(header + table + body)
-    print(f"eb_assets: {args.out} ({total} bytes, {len(blobs)} assets)")
+    dat = pack_dat(blobs, crc)
+    args.out.write_bytes(dat)
+    print(f"eb_assets: {args.out} ({len(dat)} bytes, {len(blobs)} assets)")
 
 
 def main() -> None:

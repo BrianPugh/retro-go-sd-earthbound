@@ -1,5 +1,6 @@
 **/build/
 *.bin
+!tools/converter/recipe/eb_recipe.bin
 *.elf
 *.map
 *.o

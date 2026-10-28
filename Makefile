@@ -5,6 +5,8 @@
 #   make sdpush           — push all three to /homebrews/ on the device (gnwmanager)
 #   make gen-headers      — regenerate the committed src/gen/ asset headers
 #                           (after a submodule bump; needs the ROM)
+#   make recipe           — regenerate the committed converter recipe
+#                           (tools/converter/recipe/eb_recipe.bin; same rule)
 #   make docker           — same build inside Docker (no host toolchain)
 #   make docker_shell     — interactive shell in the builder image
 #
@@ -272,8 +274,20 @@ $(ASSETS_DAT): $(EARTHBOUND_GEN_HEADERS) $(EARTHBOUND_HEADERS_EXTRA) $(EB_ASSET_
 		--packed-dir $(EARTHBOUND_PACKED_DIR) --bin-dir $(CORE_EARTHBOUND)/asm/bin \
 		--out $@
 
-.PHONY: assets gen-headers
+# The browser converter's recipe (tools/converter/FORMAT.md): rebuilds the same
+# .dat from a user's ROM. `generate` verifies it against eb_assets.py pack.
+EB_RECIPE := tools/converter/recipe/eb_recipe.bin
+
+.PHONY: assets gen-headers recipe
 assets: $(ASSETS_DAT)
+
+recipe: $(EARTHBOUND_GEN_HEADERS) $(EARTHBOUND_HEADERS_EXTRA) $(EB_ASSET_LIST)
+	$(V)python3 scripts/eb_assets.py check --gen-dir $(EARTHBOUND_GEN_DIR) \
+		--eb-dir $(CORE_EARTHBOUND) --out-dir src/gen
+	$(V)$(CORE_EARTHBOUND)/.venv/bin/python scripts/eb_recipe.py generate \
+		--rom $(EARTHBOUND_SFC) --list $(EB_ASSET_LIST) \
+		--packed-dir $(EARTHBOUND_PACKED_DIR) --bin-dir $(CORE_EARTHBOUND)/asm/bin \
+		--out $(EB_RECIPE)
 
 gen-headers: $(EARTHBOUND_GEN_HEADERS) $(EARTHBOUND_HEADERS_EXTRA)
 	$(V)python3 scripts/eb_assets.py gen-headers --gen-dir $(EARTHBOUND_GEN_DIR) \
