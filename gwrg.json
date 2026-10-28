@@ -1,0 +1,68 @@
+{
+  "$comment": "originalName is omitted: the title the binary carries (HB_NAME, 'EarthBound') is the work's own name. storage is SD only: main_earthbound.c loads earthbound.ro and earthbound_assets.dat from the card into the launcher's extflash cache (odroid_overlay_cache_file_in_flash).",
+  "originalSystem": "snes",
+  "storage": ["sd"],
+  "runtime": {
+    "$comment": "save: src/gw_save.c keeps EB's flat SAVE_FILE_SIZE buffer (3 slots x 2 copies x 1280-byte SaveBlock = 7680 bytes, ASSERT_STRUCT_SIZE in game_state.h) in one .srm; every write is an offset into that buffer. savestate: src/gw_savestate.c writes the submodule's state_dump snapshot (24-byte header + a tamp-compressed section stream; gw_savestate.c quotes ~141 KiB) to 2 ping-pong files per slot, plus the launcher's preview. The compressed length varies with game state and no ceiling has been derived from the shipped target's section sizes, so bytes is left undeclared.",
+    "savestate": { "supported": true },
+    "save": { "supported": true, "bytes": 7680 }
+  },
+  "tool": {
+    "id": "earthbound-assets",
+    "title": {
+      "en": "EarthBound asset conversion",
+      "fr": "Conversion des ressources d'EarthBound",
+      "de": "EarthBound Ressourcen-Konvertierung"
+    },
+    "maxOutputBytes": 8388608,
+    "options": [],
+    "inputs": [
+      {
+        "id": "base",
+        "required": true,
+        "label": {
+          "en": "Base ROM",
+          "fr": "ROM de base",
+          "de": "Basis-ROM"
+        },
+        "description": {
+          "en": "US (NTSC) cartridge dump, without a 512-byte copier header.",
+          "fr": "Copie de la cartouche US (NTSC), sans en-tête de copieur de 512 octets.",
+          "de": "Kopie der US-Fassung (NTSC), ohne 512-Byte-Kopierer-Header."
+        },
+        "extensions": [
+          ".sfc",
+          ".smc"
+        ],
+        "maxBytes": 4194304,
+        "variants": [
+          {
+            "id": "us",
+            "label": {
+              "en": "English (US)",
+              "fr": "Anglais (US)",
+              "de": "Englisch (US)"
+            },
+            "sha1": "D67A8EF36EF616BC39306AA1B486E1BD3047815A",
+            "bytes": 3145728
+          }
+        ],
+        "strict": true,
+        "allowMultiple": false
+      }
+    ],
+    "outputs": [
+      {
+        "id": "assets",
+        "filename": "earthbound_assets.dat",
+        "maxBytes": 3932160,
+        "$comment": "The recipe reproduces one exact file (length + SHA-256 in its header): 3,832,445 bytes measured for the current submodule. Rounded up to 3.75 MiB for headroom across submodule bumps; raise it if a bump outgrows that.",
+        "label": {
+          "en": "Asset pack",
+          "fr": "Pack de ressources",
+          "de": "Ressourcenpaket"
+        }
+      }
+    ]
+  }
+}

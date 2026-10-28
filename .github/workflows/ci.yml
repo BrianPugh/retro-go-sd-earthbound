@@ -18,8 +18,60 @@ concurrency:
 env:
   # Keep in sync with Makefile RELEASE_VERSION / firmware DOCKER_IMAGE.
   DOCKER_IMAGE: sylverb/retro-go-sd-builder:v1.5
+  # Pinned so a toolchain bump is a decision rather than a surprise.
+  RUST_VERSION: 1.90.0
 
 jobs:
+  # The browser converter (ROM -> earthbound_assets.dat). Independent of the
+  # device build, and gated on the same verifier a browser runs: a module that
+  # isn't structurally sandboxed must never reach a manifest. Modelled on
+  # zelda3-retro-go-sd's extractor job.
+  converter:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # .cargo/config.toml carries the --max-memory link arg and is found
+        # relative to the working directory; building from the repo root
+        # produces a module with unbounded memory that the verifier rejects.
+        working-directory: tools/converter
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (pinned for a stable published module)
+        run: |
+          rustup toolchain install "${RUST_VERSION}" --profile minimal --target wasm32-unknown-unknown
+          rustup default "${RUST_VERSION}"
+          rustc --version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build module
+        run: cargo build --release --locked --target wasm32-unknown-unknown --lib
+
+      - name: Verifier test suite
+        run: node test.mjs
+
+      # gwrg.json states the ROM sha1 a host matches against; the recipe header
+      # states the one the module accepts.
+      - name: Declared ROM hash matches the recipe
+        run: node test-variants.mjs
+
+      - name: Page strings resolve in every locale
+        working-directory: tools/page
+        run: node test-i18n.mjs
+
+      - name: Verify the built module
+        run: node verify.mjs target/wasm32-unknown-unknown/release/eb_converter.wasm
+
+      - name: Upload module
+        uses: actions/upload-artifact@v4
+        with:
+          name: converter-wasm
+          path: tools/converter/target/wasm32-unknown-unknown/release/eb_converter.wasm
+          if-no-files-found: error
+
   build:
     runs-on: ubuntu-latest
     outputs:
@@ -85,7 +137,7 @@ jobs:
 
   release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, converter]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -102,6 +154,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: build-artifacts
+          path: dist
+
+      - name: Download the converter
+        uses: actions/download-artifact@v4
+        with:
+          name: converter-wasm
           path: dist
 
       - name: Stage release assets
@@ -124,6 +182,56 @@ jobs:
             --out release \
             --docker-image "${{ env.DOCKER_IMAGE }}"
 
+      # The dist manifest a web installer reads. Attached to the release, which
+      # is the source of truth; the pages job mirrors it where a browser can
+      # reach it. See https://github.com/slash-proc/gwrg-dist-spec
+      - name: Generate the dist manifest
+        run: |
+          set -euo pipefail
+          PACKED_BIN="${{ needs.build.outputs.packed_bin }}"
+          TARGET_ELF="${{ needs.build.outputs.target_elf }}"
+          cp dist/eb_converter.wasm release/
+          # The ELF, for symbols[]: published and carried in the offline
+          # bundle, never installed.
+          cp "dist/${TARGET_ELF}" release/
+          ELF_NAME="$(basename "${TARGET_ELF}")"
+          # earthbound.ro, declared with its own hash. earthbound_assets.dat is
+          # the converter's output and never an artifact.
+          ARTIFACTS=()
+          for sidecar in $(make --no-print-directory print-SIDECARS); do
+            ARTIFACTS+=(--artifact "release/${sidecar}")
+          done
+          python3 scripts/make_manifest.py \
+            --bin "release/${PACKED_BIN}" \
+            "${ARTIFACTS[@]}" \
+            --wasm release/eb_converter.wasm \
+            --elf "release/${ELF_NAME}" \
+            --tag "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --commit "${GITHUB_SHA}" \
+            --out release/manifest.json
+          # stage_release.py attached the device files; the manifest, module
+          # and ELF are this step's to add.
+          echo manifest.json >> release/release-files.txt
+          echo eb_converter.wasm >> release/release-files.txt
+          echo "${ELF_NAME}" >> release/release-files.txt
+
+      # The offline bundle. Attached to the release, so what a user downloads
+      # offline is what the project actually published.
+      - name: Build the offline bundle
+        run: |
+          set -euo pipefail
+          BUNDLE="$(python3 scripts/make_bundle.py \
+            --manifest release/manifest.json --dir release --print-name)"
+          python3 scripts/make_bundle.py \
+            --manifest release/manifest.json \
+            --dir release \
+            --out "release/${BUNDLE}"
+          echo "${BUNDLE}" >> release/release-files.txt
+
+      # From zelda3: create the release empty, then upload assets one at a
+      # time with retries (a single gh call has 404'd partway through the
+      # list), and publish explicitly so the pages job sees the tag.
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -131,11 +239,115 @@ jobs:
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           mapfile -t names < release/release-files.txt
-          files=()
-          for name in "${names[@]}"; do
-            files+=("release/${name}")
+
+          # GitHub compares asset names case-insensitively.
+          dupes="$(printf '%s\n' "${names[@]}" | tr '[:upper:]' '[:lower:]' | sort | uniq -d)"
+          if [ -n "${dupes}" ]; then
+            echo "asset names collide case-insensitively: ${dupes}" >&2
+            exit 1
+          fi
+
+          # A deleted-and-recut tag leaves its old release as a draft; replace it.
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            if [ "$(gh release view "${TAG}" --json isDraft --jq .isDraft)" = "true" ]; then
+              echo "deleting stale draft release ${TAG}"
+              gh release delete "${TAG}" --yes
+              gh release create "${TAG}" \
+                --title "${TAG}" \
+                --notes-file release/RELEASE_NOTES.md
+            else
+              echo "release ${TAG} already published; updating it"
+              gh release edit "${TAG}" \
+                --title "${TAG}" \
+                --notes-file release/RELEASE_NOTES.md
+            fi
+          else
+            gh release create "${TAG}" \
+              --title "${TAG}" \
+              --notes-file release/RELEASE_NOTES.md
+          fi
+
+          # A rerun must not inherit a stale asset from an earlier build.
+          existing="$(gh release view "${TAG}" --json assets --jq '.assets[].name')"
+          for asset in ${existing}; do
+            echo "removing existing asset ${asset}"
+            gh release delete-asset "${TAG}" "${asset}" --yes
           done
-          gh release create "${TAG}" \
-            --title "${TAG}" \
-            --notes-file release/RELEASE_NOTES.md \
-            "${files[@]}"
+
+          for name in "${names[@]}"; do
+            path="release/${name}"
+            test -f "${path}" || { echo "missing asset: ${path}" >&2; exit 1; }
+            for attempt in 1 2 3; do
+              if gh release upload "${TAG}" "${path}" --clobber; then
+                echo "uploaded ${name}"
+                break
+              fi
+              if [ "${attempt}" = 3 ]; then
+                echo "giving up on ${name} after 3 attempts" >&2
+                exit 1
+              fi
+              echo "upload of ${name} failed; retrying in $((attempt * 5))s" >&2
+              sleep $((attempt * 5))
+            done
+          done
+
+          gh release edit "${TAG}" --draft=false --latest
+          echo "assets now on the release:"
+          gh release view "${TAG}" --json assets \
+            --jq '.assets[] | "  \(.name) \(.size) bytes"'
+
+  # Rebuilds the whole dist/ tree from the releases every time, so the site is
+  # a derived view. Runs after the release job so the site can't advertise a
+  # build that didn't ship.
+  pages:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build the dist tree from the releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 scripts/build_dist.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --out _site/dist \
+            --retain 5 \
+            --require-tag "${GITHUB_REF_NAME}"
+
+      # The manual conversion page, at the site root. It reads the index
+      # build_dist.py just mirrored, the same way a third-party installer does.
+      - name: Build the conversion page
+        run: |
+          set -euo pipefail
+          VERSIONS_URL="dist/versions.json" tools/page/build-page.sh
+          cp -r tools/page/site/. "${GITHUB_WORKSPACE}/_site/"
+
+      # Walks the page's own load path: config.json, the manifest it names,
+      # the module beside it, hashes, verifier.
+      - name: Check the assembled site
+        run: node tools/page/test-site.mjs _site
+
+      - name: Show what will be published
+        run: find _site -maxdepth 2 -printf "%P\n" | sort
+
+      # Pages must already be enabled (Settings -> Pages -> Source: GitHub
+      # Actions); GITHUB_TOKEN can't create a Pages site.
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

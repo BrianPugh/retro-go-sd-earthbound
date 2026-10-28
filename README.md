@@ -6,6 +6,14 @@ This is not an emulator running the SNES cartridge. It's a [native C reimplement
 
 No game data is included in this repository. You need your own copy of the US EarthBound ROM, and the build extracts the graphics, music and text from it.
 
+## Installing without building
+
+Each release publishes `EarthBound.bin` and `earthbound.ro` ready-built, plus a converter that turns your ROM into `earthbound_assets.dat` inside your browser (the ROM never leaves your computer). You still need the hardware and the ROM below, but none of the software. The ROM must be the US cartridge dump without a 512-byte copier header (SHA-1 `d67a8ef36ef616bc39306aa1b486e1bd3047815a`).
+
+**With a web installer:** any installer that follows [gwrg-dist-spec](https://github.com/slash-proc/gwrg-dist-spec) can install EarthBound from this repository's URL, `https://github.com/BrianPugh/retro-go-sd-earthbound`. It asks for your ROM, converts it, and puts all 3 files in `/homebrews/` on the card.
+
+**By hand:** open the conversion page at [brianpugh.github.io/retro-go-sd-earthbound](https://brianpugh.github.io/retro-go-sd-earthbound/), pick your ROM, and download the result ("Download everything" includes the 2 release files too). Copy all 3 files to `/homebrews/` as described in [Installing](#installing).
+
 ## What you need
 
 **Hardware**
