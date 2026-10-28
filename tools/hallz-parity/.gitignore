@@ -1,0 +1,6 @@
+target/
+# dump_vectors.py output (NNNNN.in / NNNNN.out + manifest.txt) is ROM-derived:
+# keep it out of the repo even if it's dumped inside the tree.
+*.in
+*.out
+manifest.txt

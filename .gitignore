@@ -1,5 +1,6 @@
 **/build/
 *.bin
+!tools/converter/recipe/eb_recipe.bin
 *.elf
 *.map
 *.o
@@ -16,3 +17,9 @@ earthbound.sfc
 *.sfc
 *.ro
 *.dat
+
+# The converter recipe is committed (tools/converter/FORMAT.md); the *.bin
+# rule above would otherwise hide it.
+!tools/converter/recipe/eb_recipe.bin
+# Assembled conversion page (tools/page/build-page.sh).
+tools/page/site/

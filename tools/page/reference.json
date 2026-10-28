@@ -1,0 +1,17 @@
+{
+  "inputs": [
+    {
+      "name": "EarthBound (USA).sfc",
+      "sha1": "D67A8EF36EF616BC39306AA1B486E1BD3047815A",
+      "bytes": 3145728
+    }
+  ],
+  "flags": 0,
+  "outputs": [
+    {
+      "name": "earthbound_assets.dat",
+      "bytes": 3832445,
+      "sha256": "f544832393f251d7fc57711cc284842014895bbb1fb3af21ccaf58d99560406a"
+    }
+  ]
+}

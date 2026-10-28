@@ -1,0 +1,16 @@
+[package]
+name = "hallz-parity"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Standalone: keep out of any parent workspace
+[workspace]
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "hallz-parity"
+path = "src/main.rs"

@@ -59,6 +59,38 @@ submodule bump, run `make gen-headers` (needs the ROM) and commit
 `src/gen/`; `make assets` fails while `src/gen/` is stale, or when pack-all's
 `text_refs.h` differs from upstream's committed copy (the dialogue offsets
 the code compiles in). The `.dat` is ROM-derived: never publish it.
+`make recipe` (same inputs) regenerates the browser converter's recipe, `tools/converter/recipe/eb_recipe.bin`
+(`scripts/eb_recipe.py`, format in `tools/converter/FORMAT.md`), and checks
+it rebuilds the `.dat` byte for byte; commit it with `src/gen/`. It's the one
+ROM-derived file we ship, so review `eb_recipe.py report` (literal bytes,
+text-like runs) before committing a change to it.
+
+**Releases and Pages** ([gwrg-dist-spec](https://github.com/slash-proc/gwrg-dist-spec)).
+Pushing a `v*` tag (with a matching `CHANGELOG.md` section) runs CI's
+`release` job: `stage_release.py`, then `scripts/make_manifest.py` writes
+`manifest.json` from the built bytes plus `gwrg.json` (the hand-written half:
+converter inputs/outputs, `runtime`, `storage`), and `make_bundle.py` zips the
+offline bundle. All attach to the release: `EarthBound.bin`, `earthbound.ro`,
+`eb_converter.wasm`, the ELF (`symbols[]`), `manifest.json`, the bundle; never
+the `.dat`. The `pages` job then rebuilds `dist/` from the last 5 releases
+(`build_dist.py`) and puts the conversion page (`tools/page/`, vendored from
+zelda3 and byte-identical to it apart from `build-page.sh`, `test-site.mjs`
+and the README) at the site root. Pages must be enabled once by hand
+(Settings → Pages → Source: GitHub Actions), and the repo must be public:
+installers fetch through the Pages mirror, and a private repo's Pages site
+is no use to them. `make_manifest.py`, `build_dist.py` and `make_bundle.py`
+are zelda3's, vendored verbatim except `EXTRACTOR` → `tools/converter`; take
+fixes from upstream rather than editing them. `tools/converter/test-variants.mjs`
+holds the EB-only invariant (gwrg.json's ROM sha1 and output ceiling vs the
+recipe header, and `tools/page/reference.json` vs the recipe). Bump
+`reference.json` and the output `maxBytes` with the recipe on a submodule
+bump. To dry-run conformance locally, run `make_manifest.py` + `make_bundle.py`
+on a release dir, lay it out as `dist/<tag>/` + `dist/versions.json`, and
+point the spec's `site/check.js` at it (see its `test/check.test.mjs`).
+`tools/converter/check.sh earthbound.sfc earthbound_assets.dat` is the
+converter's end-to-end test (wasm + native output vs the `make` `.dat`).
+CI runs only on pushes to `main`, tags, and PRs *into* `main`: a PR stacked
+on another branch gets no checks until it's retargeted.
 
 **Hardware test.** Upstream `external_cores` firmware reads `/bios/logo.bin`
 (extracted from its own ELF) and BSODs with "unable to open logo file"
@@ -66,7 +98,9 @@ without it: flash with `make -C <firmware> flash_sd`, not just `flash`.
 It builds no cores in-tree, so `/cores/*.bin` left by another firmware stay
 stale. Stop any `gnwmanager gdbserver` or `monitor` before `make sdpush`
 (they fight over the probe). `make sdpush` doesn't reload a running EB:
-exit to the launcher and relaunch.
+exit to the launcher and relaunch. Inspect the card with `gnwmanager sdls`
+/ `sdpull`: plain `gnwmanager ls` mounts the LittleFS in internal flash and
+reports `LFS_ERR_CORRUPT` on this firmware, which says nothing about the SD.
 
 **Logs.** This repo has no `make monitor`. EB's `printf` goes to the
 firmware's log buffer: `gnwmanager monitor --elf <firmware>/build/gw_retro_go.elf`
