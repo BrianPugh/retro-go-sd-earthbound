@@ -59,6 +59,11 @@ submodule bump, run `make gen-headers` (needs the ROM) and commit
 `src/gen/`; `make assets` fails while `src/gen/` is stale, or when pack-all's
 `text_refs.h` differs from upstream's committed copy (the dialogue offsets
 the code compiles in). The `.dat` is ROM-derived: never publish it.
+`make recipe` (same inputs) regenerates the browser converter's recipe, `tools/converter/recipe/eb_recipe.bin`
+(`scripts/eb_recipe.py`, format in `tools/converter/FORMAT.md`), and checks
+it rebuilds the `.dat` byte for byte; commit it with `src/gen/`. It's the one
+ROM-derived file we ship, so review `eb_recipe.py report` (literal bytes,
+text-like runs) before committing a change to it.
 
 **Releases and Pages** ([gwrg-dist-spec](https://github.com/slash-proc/gwrg-dist-spec)).
 Pushing a `v*` tag (with a matching `CHANGELOG.md` section) runs CI's
