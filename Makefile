@@ -295,9 +295,12 @@ $(RELOC_CHECK): $(TARGET_ELF) scripts/check_eb_rodata_relocs.py
 	$(V)python3 scripts/check_eb_rodata_relocs.py $(TOOL_PREFIX) $< || (rm -f $<; exit 1)
 	$(V)touch $@
 
-$(RO_BIN): $(TARGET_ELF) $(RELOC_CHECK)
+# The .ro carries a trailer listing every RAM_EMU word to relocate at boot
+# (see scripts/append_eb_reloc_table.py), so it must always match the .bin.
+$(RO_BIN): $(TARGET_ELF) $(RELOC_CHECK) scripts/append_eb_reloc_table.py
 	$(V)$(ECHO) [ RO ] $(RO_BIN)
 	$(V)$(CP) -O binary --only-section=.rodata_earthbound $< $@
+	$(V)python3 scripts/append_eb_reloc_table.py $(TOOL_PREFIX) $< $@ || (rm -f $@; exit 1)
 
 pack: $(TARGET_BIN) $(RO_BIN) $(COVER_JPG) $(RELOC_CHECK)
 	$(V)$(ECHO) [ PACK GWHB ] "$(PACKED_BIN)" version=$(CORE_VERSION)

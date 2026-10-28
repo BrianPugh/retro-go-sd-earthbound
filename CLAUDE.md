@@ -36,9 +36,12 @@ make sdpush   # EarthBound.bin + earthbound.ro → /homebrews/
 ```
 
 **Outputs.** `EarthBound.bin` (GWHB, `PACKED_BIN`) and `earthbound.ro`
-(rodata sidecar, ~3.8 MB). Always push **both**: a stale `.ro` against a
-new `.bin` silently corrupts strings, because `PatchCodeRodataOffset`
-rewrites code pointers using the new layout. `earthbound.ro` is always
+(rodata sidecar, ~3.8 MB). Always push **both**: the `.ro` ends with a
+table of the exact RAM_EMU words to relocate at boot
+(`scripts/append_eb_reloc_table.py`, from `--emit-relocs`), so a stale `.ro`
+patches the wrong words (it asserts only when the trailer is missing). Never
+go back to scanning RAM_EMU for values in the rodata range: Thumb-2
+instructions collide with it (that corrupted the bridge `memcpy`). `earthbound.ro` is always
 written to the repo root, even with a different `BUILD_DIR`, so a second
 build config overwrites the first one's sidecar.
 

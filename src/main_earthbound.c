@@ -19,6 +19,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <assert.h>
 
 #include "main.h"
 #include "gw_lcd.h"
@@ -51,63 +52,54 @@ odroid_gamepad_state_t eb_joystick;
  * sentinel link VMA of the rodata sidecar (the patcher's base). */
 extern uint32_t __RAM_EMU_START__;
 extern void *__rodata_earthbound_start__[];
-extern void *_EARTHBOUND_MAIN_CODE_START[];
-extern void *_EARTHBOUND_MAIN_CODE_END[];
+extern void *__rodata_earthbound_end__[];
 
 /* The sidecar sits next to the launched .bin (/homebrews/ today). */
 #define EB_RODATA_FILENAME "earthbound.ro"
 
-/* PatchCodeRodataOffset — walks RAM_EMU looking for pointers that fall inside
- * .rodata_earthbound's linker VMA range and rewrites them to the actual
- * runtime address where odroid_overlay_cache_file_in_flash placed the rodata
- * blob. Skips the main_earthbound.o code window (between
- * _EARTHBOUND_MAIN_CODE_*) because that code's rodata lives in RAM_EMU
- * itself, not in .rodata_earthbound.
+/* PatchCodeRodataOffset — rewrites every RAM_EMU pointer into
+ * .rodata_earthbound from its sentinel link VMA to the runtime address where
+ * odroid_overlay_cache_file_in_flash placed the rodata blob.
  *
- * NON-OBVIOUS: this scans RAM_EMU ONLY. .rodata_earthbound loads to a runtime
- * address that VARIES per boot, so every literal-pool pointer into it must be
- * rewritten here or it keeps the 0xCAFE.. *link* address and faults on first
- * use (symptom: BSOD with PC inside newlib _vfiprintf_r — a garbage printf
- * format-string pointer). Therefore if you ever relocate an EarthBound .o's
- * code/data OUT of RAM_EMU (e.g. into ITCM), it is no longer scanned and you
- * must run PatchRodataRange() over the new location too, with the SAME
- * base/offset. The ITCM segment holds .bss only (zeroed at load, so nothing
- * there needs patching). (Tried & reverted: ppu_render.o → ITCM — link/runtime
- * worked once patched, but gave no FPS gain; EB render is compute-bound.) */
-static void PatchRodataRange(uint32_t *ptr, uint32_t *end,
-                             uint32_t rodata_base, int32_t offset,
-                             uint32_t rodata_length, bool skip_main_code)
-{
-    while (ptr < end) {
-        bool in_skip_window = skip_main_code &&
-            (ptr >= (uint32_t *)&_EARTHBOUND_MAIN_CODE_START) &&
-            (ptr <= (uint32_t *)&_EARTHBOUND_MAIN_CODE_END);
-        if (!in_skip_window) {
-            uint32_t value = *ptr;
-            if ((value >= rodata_base) && (value < rodata_base + rodata_length)) {
-                *ptr = value + offset;
-                wdog_refresh();
-            }
-        }
-        ptr++;
-    }
-}
+ * The words to patch come from the relocation table that
+ * scripts/append_eb_reloc_table.py appends to earthbound.ro (exact
+ * R_ARM_ABS32 sites from --emit-relocs). Do NOT go back to scanning RAM_EMU
+ * for values in the rodata range: Thumb-2 instructions can encode to such a
+ * value (`ldrb.w ip, [r1], #1` = 0xcb01f811 broke the bridge memcpy into an
+ * endless copy that ran off the end of RAM_EMU).
+ *
+ * The table leaves out main_earthbound.o's code window (between
+ * _EARTHBOUND_MAIN_CODE_*), which holds this function's own
+ * __rodata_earthbound_* base literals. Code moved OUT of RAM_EMU (e.g. into
+ * ITCM) isn't covered: the build script fails on ABS32 sites outside
+ * .core_entry. */
+#define EB_RELOC_MAGIC 0x31524245u /* "EBR1" */
 
-static void PatchCodeRodataOffset(uint8_t *rodata, uint32_t rodata_length)
+static void PatchCodeRodataOffset(uint8_t *rodata, uint32_t file_length)
 {
     uint32_t rodata_base = (uint32_t)__rodata_earthbound_start__;
+    uint32_t rodata_length = (uint32_t)__rodata_earthbound_end__ - rodata_base;
+    uint32_t table_pos = (rodata_length + 3) & ~3u;
     int32_t offset = (uint32_t)rodata - rodata_base;
 
     printf("eb rodata = %p base = 0x%08lX offset = 0x%08lX length = %lu\n",
            rodata, rodata_base, offset, (unsigned long)rodata_length);
 
-    /* RAM_EMU: code + data + bss. Skip the main_earthbound.o code window
-     * because that code's local rodata lives in RAM_EMU itself (not in
-     * .rodata_earthbound) and patching its instructions would risk corrupting
-     * code bytes that coincidentally match the rodata VMA range. */
-    PatchRodataRange(&__RAM_EMU_START__,
-                     &__CORE_BSS_END__,
-                     rodata_base, offset, rodata_length, /*skip_main_code=*/true);
+    /* A stale earthbound.ro (older build, or one without the trailer) would
+     * leave pointers at the sentinel VMA or patch the wrong words. */
+    const uint32_t *table = (const uint32_t *)(rodata + table_pos);
+    assert(file_length >= table_pos + 8 && table[0] == EB_RELOC_MAGIC &&
+           "earthbound.ro has no reloc table: push the .ro from the same build");
+    uint32_t count = table[1];
+    assert(file_length >= table_pos + 8 + count * 4 &&
+           "earthbound.ro reloc table truncated");
+
+    uint8_t *ram_emu = (uint8_t *)&__RAM_EMU_START__;
+    for (uint32_t i = 0; i < count; i++) {
+        *(uint32_t *)(ram_emu + table[2 + i]) += offset;
+        if ((i & 1023) == 0)
+            wdog_refresh();
+    }
 }
 
 /* Defined in gw_video.c: re-render the current (frozen) PPU frame into the
