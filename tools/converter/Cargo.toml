@@ -1,0 +1,27 @@
+[package]
+name = "eb_converter"
+version = "0.1.0"
+edition = "2021"
+description = "EarthBound ROM in, earthbound_assets.dat out, by running an embedded recipe. Compiles to a zero-import wasm module."
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "eb-converter"
+path = "src/bin/cli.rs"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# The interpreter and HAL codec crawl unoptimised; keep `cargo test` quick.
+[profile.test]
+opt-level = 2
+
+[profile.dev]
+opt-level = 2

@@ -1,0 +1,11 @@
+[target.wasm32-unknown-unknown]
+# Cap declared memory growth at 64 MiB (1024 pages) so the module's appetite is
+# bounded by the binary itself and verify.mjs can check it statically.
+#
+# Measured on the real ROM with a stand-in recipe (real sources: 441 HAL
+# streams + the expanded ROM; whole-asset COPYs, LIT for the rest, 753 KB of
+# recipe): a full run peaks at 241 pages (15 MiB), the same after 3 runs in one
+# instance. The real recipe is smaller but adds COMPRESS buffers, so 1024
+# leaves about 4x headroom. Re-measure with `node test-abi.mjs <wasm> <rom>`,
+# which prints the peak ("info peak memory N pages").
+rustflags = ["-C", "link-arg=--max-memory=67108864"]
