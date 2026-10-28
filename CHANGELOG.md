@@ -1,75 +1,29 @@
 # Changelog
 
-This file is a template for the single project created from this repo.
-At project setup time you choose exactly one kind by setting `PROJECT_KIND`
-to `core` or `homebrew` (you will only build/release that chosen kind).
+Each release tag needs a section here with a matching heading (`## [vX.Y.Z] - YYYY-MM-DD`); CI uses its body as the GitHub Release notes.
 
-Update the content for your project and keep the section heading matching
-the pushed release tag (CI requirement).
+## [v0.1.0] - 2026-10-28
 
-This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html). Release tags must
-match a section heading exactly (for example `v1.0.0`).
+First release: EarthBound running natively on the Game & Watch as a Retro-Go SD homebrew, built from the [C reimplementation](https://github.com/BrianPugh/earthbound) (no SNES emulation).
 
-When you cut a release:
+### Requirements
 
-1. Move items from `[Unreleased]` into a new `## [vX.Y.Z] - YYYY-MM-DD` section.
-2. Commit the changelog update.
-3. Push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
+- A Game & Watch with the SD-card mod, running Retro-Go SD firmware from the [`external_cores` branch](https://github.com/sylverb/game-and-watch-retro-go-sd/tree/external_cores).
+- Your own US EarthBound ROM (SHA-1 `d67a8ef36ef616bc39306aa1b486e1bd3047815a`, no copier header) to make `earthbound_assets.dat`. No game data is included in this release.
 
-CI reads the matching section and uses it as the GitHub Release notes. Assets
-attached to the release:
+### Installing
 
-- `<binary>-<tag>.zip` — SD layout only (`cores/` or `homebrews/` + packed `.bin`)
-- `<binary>-<tag>-debug.zip` — ELF + linker map (use `arm-none-eabi-addr2line` for crash PC/LR → function/line)
+Turn your ROM into `earthbound_assets.dat` with the [conversion page](https://brianpugh.github.io/retro-go-sd-earthbound/) (it runs in your browser; the ROM never leaves your computer), or with any installer that follows [gwrg-dist-spec](https://github.com/slash-proc/gwrg-dist-spec). Copy `EarthBound.bin`, `earthbound.ro` and `earthbound_assets.dat` to `/homebrews/` on the SD card. The 3 files must come from the same release.
 
-## [Unreleased]
+### Features
 
-### Added
+- The full game, with in-game saves (call Dad) written straight to the SD card.
+- Savestates from the PAUSE/SET menu, and the launcher can start the game from any savestate slot.
+- POWER saves a savestate and sleeps; the save is written before sleeping, so it also survives a flat battery.
+- Music and sound effects at the correct tempo, even when busy scenes run below 60 fps.
+- TIME toggles a frame-rate overlay.
 
-- (your changes here)
+### Known limitations
 
-### Changed
-
-- (your changes here)
-
-### Fixed
-
-- (your changes here)
-
-## [v1.0.0] - 2026-08-12
-
-Initial public release for your chosen kind (`core` or `homebrew`).
-
-### Added
-
-- Freestanding Cortex-M7 skeleton (`src/main.c`) with LCD demo, square-wave
-  audio, save/load/screenshot hooks, and watchdog-friendly frame loop.
-- Vendored SDK, linker scripts, and ABI bridge for `gw_firmware_abi_t`.
-- Packaging for both project kinds:
-  - **core** → `pack_core.py`, SD path `/cores/<name>.bin`
-  - **homebrew** → `pack_homebrew.py`, SD path `/homebrews/<name>.bin`
-- Docker builder integration (`make docker`) using `sylverb/retro-go-sd-builder`.
-- CI build on push/PR and automated GitHub Release on `v*` tags.
-
-### Install
-
-Only the section corresponding to your chosen `PROJECT_KIND` is relevant for
-your derived project.
-
-**Core (`PROJECT_KIND=core`, default)**
-
-- Copy `example.bin` to `/cores/` on the SD card.
-- Place test ROMs under `/roms/example/` (dirname matches `CORE_NAME` in the
-  Makefile).
-- Requires firmware whose ABI matches `SDK_VERSION` in this repository.
-
-**Homebrew (`PROJECT_KIND=homebrew`)**
-
-- Set `PROJECT_KIND=homebrew` in the Makefile, rebuild, then copy
-  `ExampleHB.bin` to `/homebrews/`.
-- Optional coverflow override: `/covers/homebrew/ExampleHB.img` (JPEG ≤186×100,
-  ≤10 KiB).
-
-The release archive contains the ready-to-copy SD layout for the active project
-kind only (`cores/` or `homebrews/`).
+- Busy scenes (many sprites, large battle backgrounds) run slower than the original.
+- A savestate can't be taken while a text box is waiting for a button press ("SAVESTATE FAIL"); press through the text and try again.
