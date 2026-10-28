@@ -76,20 +76,21 @@ make -j8 GCC_PATH=/Applications/ArmGNUToolchain/15.3.rel2/arm-none-eabi/bin
 
 The first build takes a few minutes: it sets up a private Python environment and extracts the game's assets from your ROM. Later builds are much faster.
 
-When it finishes you'll have 2 new files in the repository folder:
+When it finishes you'll have 3 new files in the repository folder:
 
 | File | Size | What it is |
 | --- | --- | --- |
-| `EarthBound.bin` | ~370 KB | The game's code |
-| `earthbound.ro` | ~3.8 MB | Game data extracted from your ROM, plus data the code needs to start up |
+| `EarthBound.bin` | ~360 KB | The game's code |
+| `earthbound.ro` | ~16 KB | Data the code needs to start up |
+| `earthbound_assets.dat` | ~3.8 MB | Game data extracted from your ROM |
 
-**The 2 files are a matched pair.** Always copy both from the same build. An `EarthBound.bin` paired with an `earthbound.ro` from a different build will crash at launch.
+**`EarthBound.bin` and `earthbound.ro` are a matched pair.** Always copy both from the same build. An `EarthBound.bin` paired with an `earthbound.ro` from a different build will crash at launch. `earthbound_assets.dat` only changes when the EarthBound code under `external/earthbound` is updated; if it no longer matches, EarthBound stops at launch with an error saying so.
 
 ## Installing
 
-Both files go in the `/homebrews/` folder at the root of the SD card.
+All 3 files go in the `/homebrews/` folder at the root of the SD card.
 
-**With a card reader:** power the Game & Watch off, take out the SD card, put it in your computer, create a `homebrews` folder at the top level if there isn't one, and copy `EarthBound.bin` and `earthbound.ro` into it.
+**With a card reader:** power the Game & Watch off, take out the SD card, put it in your computer, create a `homebrews` folder at the top level if there isn't one, and copy `EarthBound.bin`, `earthbound.ro` and `earthbound_assets.dat` into it.
 
 **With a debug probe and gnwmanager:** plug the Game & Watch in and run:
 
@@ -135,21 +136,21 @@ Quiet scenes run at the original's 60 fps. Busy scenes (lots of sprites, big bat
 
 **`external/earthbound` is empty, or the build complains about missing files in it.** The submodule wasn't downloaded: run `git submodule update --init --recursive`.
 
-**A blue error screen (BSOD) right after launching EarthBound.** Most often `EarthBound.bin` and `earthbound.ro` come from different builds. Copy both again from the same build.
+**A blue error screen (BSOD) right after launching EarthBound.** Most often `EarthBound.bin` and `earthbound.ro` come from different builds, or `earthbound_assets.dat` is missing or was built for a different version. Copy all 3 again from the same build.
 
 **A blue error screen saying "unable to open logo file" when the Game & Watch starts.** That's the firmware, before EarthBound runs: it was flashed without its SD-card files. Re-flash the firmware with `make flash_sd` (in the firmware repository) instead of `make flash`.
 
-**EarthBound doesn't appear in the Homebrew tab.** Check that both files are in `/homebrews/` (with an `s`), and that your firmware is from the `external_cores` branch.
+**EarthBound doesn't appear in the Homebrew tab.** Check that the files are in `/homebrews/` (with an `s`), and that your firmware is from the `external_cores` branch.
 
 **The launcher refuses to start EarthBound** (for example with an ABI or version error). EarthBound needs a newer Retro-Go SD build than the one installed. Update the firmware from the `external_cores` branch.
 
 ## Sharing
 
-Please don't share `earthbound.ro`, or a ROM. It contains data extracted from the game, which is why each person builds their own from their own ROM. Sharing links to this repository is fine.
+Please don't share `earthbound_assets.dat`, or a ROM. It contains data extracted from the game, which is why each person builds their own from their own ROM. Sharing links to this repository is fine.
 
 ## For developers
 
-`CLAUDE.md` has the technical notes: how the build packs the game into the Game & Watch's memory, the rules for the `earthbound.ro` data file, debugging and profiling tips, and how to update the vendored Retro-Go SD SDK under `sdk/`.
+`CLAUDE.md` has the technical notes: how the build packs the game into the Game & Watch's memory, the rules for the `earthbound.ro` and `earthbound_assets.dat` data files, debugging and profiling tips, and how to update the vendored Retro-Go SD SDK under `sdk/`.
 
 ## Credits
 

@@ -25,6 +25,7 @@ jobs:
     outputs:
       project_kind: ${{ steps.meta.outputs.project_kind }}
       packed_bin: ${{ steps.meta.outputs.packed_bin }}
+      sidecars: ${{ steps.meta.outputs.sidecars }}
       target_elf: ${{ steps.meta.outputs.target_elf }}
       target_map: ${{ steps.meta.outputs.target_map }}
 
@@ -44,6 +45,16 @@ jobs:
           PACKED_BIN="$(make --no-print-directory -f Makefile print-PACKED_BIN)"
           TARGET_ELF="$(make --no-print-directory -f Makefile print-TARGET_ELF)"
           TARGET_MAP="$(make --no-print-directory -f Makefile print-TARGET_MAP)"
+          # Device files installed beside the .bin (earthbound.ro), one per
+          # line for upload-artifact. The ROM-derived earthbound_assets.dat is
+          # not one: CI has no ROM, and it is never published.
+          SIDECARS="$(make --no-print-directory -f Makefile print-SIDECARS)"
+          {
+            echo "sidecars<<SIDECARS_EOF"
+            for s in ${SIDECARS}; do echo "${s}"; done
+            echo "SIDECARS_EOF"
+          } >> "${GITHUB_OUTPUT}"
+          echo "SIDECARS=${SIDECARS}"
           echo "project_kind=${PROJECT_KIND}" >> "${GITHUB_OUTPUT}"
           echo "packed_bin=${PACKED_BIN}" >> "${GITHUB_OUTPUT}"
           echo "target_elf=${TARGET_ELF}" >> "${GITHUB_OUTPUT}"
@@ -67,6 +78,7 @@ jobs:
           name: build-artifacts
           path: |
             ${{ steps.meta.outputs.packed_bin }}
+            ${{ steps.meta.outputs.sidecars }}
             ${{ steps.meta.outputs.target_elf }}
             ${{ steps.meta.outputs.target_map }}
           if-no-files-found: error
@@ -98,9 +110,14 @@ jobs:
           PACKED_BIN="${{ needs.build.outputs.packed_bin }}"
           TARGET_ELF="${{ needs.build.outputs.target_elf }}"
           TARGET_MAP="${{ needs.build.outputs.target_map }}"
+          SIDECAR_ARGS=()
+          for sidecar in $(make --no-print-directory print-SIDECARS); do
+            SIDECAR_ARGS+=(--sidecar "dist/${sidecar}")
+          done
           # Artifact download preserves relative paths under dist/.
           python3 scripts/stage_release.py \
             --bin "dist/${PACKED_BIN}" \
+            "${SIDECAR_ARGS[@]}" \
             --elf "dist/${TARGET_ELF}" \
             --map "dist/${TARGET_MAP}" \
             --tag "${GITHUB_REF_NAME}" \

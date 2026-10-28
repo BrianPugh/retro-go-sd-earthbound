@@ -26,26 +26,39 @@ as a GWHB homebrew for the upstream firmware's `external_cores` branch
 favor of this repo: don't port changes back to it. The SDK template sections
 below still apply.
 
-**Build.** Needs the donor ROM at `./earthbound.sfc` (or
-`EARTHBOUND_SFC=...`), arm-none-eabi-gcc on `PATH` or `GCC_PATH=...`, and
-`git submodule update --init --recursive`. The first build runs the
-submodule's `unix-venv unix-extract` to set up ebtools and extract assets.
+**Build.** Needs arm-none-eabi-gcc on `PATH` or `GCC_PATH=...`, and
+`git submodule update --init --recursive`. `EarthBound.bin` and
+`earthbound.ro` build without the ROM (CI has none). The asset pack needs
+the donor ROM at `./earthbound.sfc` (or `EARTHBOUND_SFC=...`) and is built
+only when it's present: the first such build runs the submodule's
+`unix-venv unix-extract` to set up ebtools and extract assets.
 
 ```bash
 make -j10 GCC_PATH=/Applications/ArmGNUToolchain/15.3.rel2/arm-none-eabi/bin
-make sdpush   # EarthBound.bin + earthbound.ro → /homebrews/
+make sdpush   # EarthBound.bin + earthbound.ro + earthbound_assets.dat → /homebrews/
 ```
 
-**Outputs.** `EarthBound.bin` (GWHB, `PACKED_BIN`) and `earthbound.ro`
-(rodata sidecar, ~3.8 MB). Always push **both**: the `.ro` ends with a
+**Outputs.** `EarthBound.bin` (GWHB, `PACKED_BIN`), `earthbound.ro`
+(rodata sidecar, ~16 KB) and `earthbound_assets.dat` (ROM assets, ~3.8 MB).
+Always push the `.bin` and `.ro` **together**: the `.ro` ends with a
 table of the exact RAM_EMU words to relocate at boot
 (`scripts/append_eb_reloc_table.py`, from `--emit-relocs`), so a stale `.ro`
 patches the wrong words (it asserts only when the trailer is missing). Never
 go back to scanning RAM_EMU for values in the rodata range: Thumb-2
 instructions collide with it (that corrupted the bridge `memcpy`).
-`earthbound.ro` is written next to `PACKED_BIN`, so a second build config
+Both sidecars are written next to `PACKED_BIN`, so a second build config
 needs its own `PACKED_BIN` (e.g. `BUILD_DIR=build/x
-PACKED_BIN=build/x/EarthBound.bin`) to keep its own sidecar.
+PACKED_BIN=build/x/EarthBound.bin`) to keep its own.
+
+**Asset pack.** `scripts/eb_assets.py` (docstring has the format). The
+binary compiles against committed, ROM-free headers in `src/gen/` (asset
+ids, item/music enums) and indexes `embedded_assets[]` at boot from the
+`.dat` header. `src/gen/eb_asset_list.txt` fixes the layout; its CRC is in
+both the binary and the `.dat`, and boot asserts they match. After a
+submodule bump, run `make gen-headers` (needs the ROM) and commit
+`src/gen/`; `make assets` fails while `src/gen/` is stale, or when pack-all's
+`text_refs.h` differs from upstream's committed copy (the dialogue offsets
+the code compiles in). The `.dat` is ROM-derived: never publish it.
 
 **Hardware test.** Upstream `external_cores` firmware reads `/bios/logo.bin`
 (extracted from its own ELF) and BSODs with "unable to open logo file"
@@ -71,7 +84,7 @@ RAM_EMU holds code + `.bss` and must leave ≥ 74 KB for the `ram_malloc`
 heap (lakesnes audio; link ASSERT). The cold entity/map_loader tables and
 the stereo scratch (~35 KB) go in an ITCM NOLOAD segment, since the SDK
 forbids AHB segments. Rodata links at a sentinel VMA and is extracted to the
-sidecar.
+`.ro` sidecar; the ROM assets aren't linked at all.
 
 **Rodata pointer rule.** Pointers stored *inside* the sidecar are never
 patched. A const table that points into `.rodata` must be `EB_NORELOC`.
@@ -92,8 +105,10 @@ savestate in each (saves are compatible across builds of the same EB code).
 - In the root `Makefile`, `CORE_EXTRA_OBJECTS` must be set before
   `include $(GNW_CORE_SDK)/Makefile` or the SDK rules don't see it.
 
-**Never commit** `earthbound.sfc` or anything derived from it (`*.ro`,
-extracted assets). `.gitignore` covers `*.sfc` and `*.ro`.
+**Never commit** `earthbound.sfc` or anything derived from it
+(`earthbound_assets.dat`, extracted assets). `src/gen/` is the exception:
+ids and names only, no asset bytes. `.gitignore` covers `*.sfc`, `*.ro`
+and `*.dat`.
 
 ## Mental model
 
@@ -445,7 +460,7 @@ In this repo after a firmware change:
 
 | Path     | Notes                                                                 |
 | -------- | --------------------------------------------------------------------- |
-| `src/main_earthbound.c` | GWHB entry `app_main_earthbound`: rodata sidecar caching + `PatchCodeRodataOffset`, savestate/resume glue |
+| `src/main_earthbound.c` | GWHB entry `app_main_earthbound`: rodata sidecar caching + `PatchCodeRodataOffset`, asset pack indexing, savestate/resume glue |
 | `src/eb_main.c` | `earthbound_main()` game loop (the submodule's old `port/gw_retro_go/main.c`); the template's `src/main.c` demo was removed |
 | `src/gw_*.c` | EB `platform.h` implementations (video, audio, input, save, savestate, timer, debug) |
 | `tools/eb_profile/` | PC-sampling profiler over ST-Link/OpenOCD (see its README) |
