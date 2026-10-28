@@ -134,12 +134,54 @@ static bool eb_LoadState(const char *savePathName)
     return true;
 }
 
-/* TODO: the firmware's POWER path calls this with slot -1 and then
- * enters STOP2 immediately, so the requested capture only lands after wake.
- * Make the slot -1 save synchronous (free-run to the root boundary
- * inside this callback). */
+/* POWER safety save. The firmware's POWER handler (common_emu_input_loop) acts
+ * on release: it calls eb_SaveState with the slot -1 path and enters STOP2
+ * right away. A request made there could only be serviced after wake, since
+ * the callback runs one level below the root boundary and can't free-run the
+ * game to it. So the capture starts on the POWER *press* instead, and
+ * eb_power_hold() keeps reporting POWER held to the firmware until it
+ * resolves: the firmware only sleeps once the snapshot is on the card, and
+ * the slot -1 request that follows is a no-op. If the capture fails (e.g. the
+ * game sits at a "▼" prompt and never reaches the boundary), the firmware's
+ * request goes through as before and lands after wake. */
+static char *s_power_path;   /* ODROID_PATH_SAVE_STATE_OFF, from odroid_system_get_path */
+static bool s_power_prev;
+static enum { POWER_IDLE, POWER_SAVING, POWER_SAVED } s_power_state;
+
+bool eb_power_hold(bool power_down)
+{
+    bool pressed = power_down && !s_power_prev;
+    s_power_prev = power_down;
+
+    /* Don't hijack a pause-menu save/load that's still unwinding: it owns the
+     * backend's base path until it resolves. */
+    if (pressed && s_power_state == POWER_IDLE &&
+        host_capture_status() != HOST_CAPTURE_PENDING) {
+        if (!s_power_path)
+            s_power_path = odroid_system_get_path(ODROID_PATH_SAVE_STATE_OFF, ACTIVE_FILE->path);
+        if (s_power_path) {
+            rg_storage_mkdir(rg_dirname(s_power_path));
+            eb_savestate_set_base(s_power_path);
+            host_request_capture();
+            s_power_state = POWER_SAVING;
+        }
+    }
+    if (s_power_state == POWER_SAVING) {
+        if (host_capture_status() == HOST_CAPTURE_PENDING)
+            return true;
+        s_power_state = (host_capture_status() == HOST_CAPTURE_COMMITTED)
+                        ? POWER_SAVED : POWER_IDLE;
+    }
+    return false;
+}
+
 static bool eb_SaveState(const char *savePathName)
 {
+    if (s_power_state == POWER_SAVED && strcmp(savePathName, s_power_path) == 0) {
+        s_power_state = POWER_IDLE;   /* already written on the POWER press */
+        return true;
+    }
+    s_power_state = POWER_IDLE;
     eb_savestate_set_base(savePathName);
     host_request_capture();  /* torn-safe write at the next root boundary */
     return true;

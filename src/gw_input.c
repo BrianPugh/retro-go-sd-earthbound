@@ -34,6 +34,7 @@
 #include "common.h"
 #include "odroid_input.h"
 #include "odroid_overlay.h"
+#include "main_earthbound.h"
 
 /* Defined in main_earthbound.c; populated by us each frame. */
 extern odroid_gamepad_state_t eb_joystick;
@@ -80,7 +81,11 @@ void platform_input_poll(void)
     odroid_input_read_gamepad(&eb_joystick);
 
     /* POWER is left to common_emu_input_loop: on release it takes the slot -1
-     * safety save (eb_SaveState) and sleeps in STOP2, resuming in place. */
+     * safety save (eb_SaveState) and sleeps in STOP2, resuming in place.
+     * eb_power_hold() starts that save on the press and holds the release back
+     * until it lands (main_earthbound.c). */
+    if (eb_power_hold(eb_joystick.values[ODROID_INPUT_POWER]))
+        eb_joystick.values[ODROID_INPUT_POWER] = 1;
 
     /* Must run BEFORE the PAD_* translation: when a PAUSE/SET chord fires,
      * common_emu_input_loop memsets the joystick to 0 to keep the consumed
