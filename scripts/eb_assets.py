@@ -6,7 +6,8 @@ binary, so EarthBound.bin and earthbound.ro build without the ROM. The binary
 only needs the asset *ids*, which live in committed headers under src/gen/.
 
   gen-headers   ebtools outputs -> src/gen/{asset_ids.h, embedded_assets.h,
-                eb_asset_list.txt, items_generated.h, music_generated.h}.
+                eb_asset_list.txt, items_generated.h (minus the item-name
+                strings), music_generated.h}.
                 Rerun after a submodule bump (needs the ROM).
   check         fail if src/gen/eb_asset_list.txt no longer matches what
                 ebtools embed-registry produced (stale committed headers).
@@ -132,6 +133,17 @@ def gen_asset_ids_h(gen_dir: Path, layout_crc: int) -> str:
     return "".join(out)
 
 
+def gen_items_h(gen_dir: Path) -> str:
+    """ebtools' items_generated.h minus its ITEMS_INCLUDE_NAMES block: the
+    item names are ROM text, and only upstream's host tools use them."""
+    src = (gen_dir / "items_generated.h").read_text()
+    out, n = re.subn(r"#ifdef ITEMS_INCLUDE_NAMES\n.*?#endif /\* ITEMS_INCLUDE_NAMES \*/\n\n?",
+                     "", src, flags=re.S)
+    if n != 1:
+        sys.exit("eb_assets: items_generated.h has no ITEMS_INCLUDE_NAMES block to drop")
+    return out
+
+
 EMBEDDED_ASSETS_H = GEN_NOTE + """\
 #ifndef EMBEDDED_ASSETS_H
 #define EMBEDDED_ASSETS_H
@@ -162,8 +174,8 @@ def cmd_gen_headers(args) -> None:
     (out / "eb_asset_list.txt").write_text(text)
     (out / "asset_ids.h").write_text(gen_asset_ids_h(args.gen_dir, crc))
     (out / "embedded_assets.h").write_text(EMBEDDED_ASSETS_H)
-    for name in ("items_generated.h", "music_generated.h"):
-        (out / name).write_bytes((args.gen_dir / name).read_bytes())
+    (out / "items_generated.h").write_text(gen_items_h(args.gen_dir))
+    (out / "music_generated.h").write_bytes((args.gen_dir / "music_generated.h").read_bytes())
     print(f"eb_assets: {len(layout)} assets, layout CRC 0x{crc:08X} -> {out}")
 
 
@@ -175,7 +187,7 @@ def cmd_check(args) -> None:
         "eb_asset_list.txt": layout,
         "asset_ids.h": gen_asset_ids_h(args.gen_dir, zlib.crc32(layout.encode())),
         "embedded_assets.h": EMBEDDED_ASSETS_H,
-        "items_generated.h": (args.gen_dir / "items_generated.h").read_text(),
+        "items_generated.h": gen_items_h(args.gen_dir),
         "music_generated.h": (args.gen_dir / "music_generated.h").read_text(),
     }
     stale = [name for name, text in expected.items()

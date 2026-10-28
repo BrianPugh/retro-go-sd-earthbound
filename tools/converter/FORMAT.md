@@ -73,6 +73,14 @@ A byte opcode stream. The interpreter keeps a **stack of byte buffers**
 Any out-of-range source read, unknown opcode, stack misuse, or trailing
 bytes after `END` is an error.
 
+**What the recipe stores.** `COPY`/`SEQ` operands are offsets and lengths
+into the user's ROM-derived sources. The only payload bytes are `LIT` data
+(control codes, remapped table numbers, `.bundled` headers; about 1.9 KB)
+and `U32` values (about 40 KB), which are offsets into the dialogue blob:
+the same numbers upstream publishes as `MSG_*` in `src/data/text_refs.h`.
+Run `scripts/eb_recipe.py report` on a regenerated recipe and review any
+text-like `LIT` run before committing it.
+
 ### Output
 
 After `END` the interpreter writes the `.dat` container itself (the
