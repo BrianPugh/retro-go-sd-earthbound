@@ -50,9 +50,11 @@ build config overwrites the first one's sidecar.
 without it: flash with `make -C <firmware> flash_sd`, not just `flash`.
 It builds no cores in-tree, so `/cores/*.bin` left by another firmware stay
 stale. Stop any `gnwmanager gdbserver` before `make sdpush` (they fight over
-the probe). The default build (all `EB_GW_ABI_*` = 0) runs ~20 fps where the
-fork ran ~28: `lcd_swap()` double-buffering quantizes frames to the 60 Hz
-refresh. That's expected; `EB_GW_ABI_TB_PRESENT=1` restores triple buffering.
+the probe). The default build (all `EB_GW_ABI_*` = 0) is the shipping
+target: stay compatible with stock `external_cores` firmware. It renders
+into `eb_fb3` and copies into the launcher buffer before `lcd_swap()`, which
+avoids the 60 Hz quantization of plain double buffering (that ran ~20 fps)
+at the cost of a 150 KiB copy per frame; the fork's triple buffering ran ~28.
 
 **Memory layout** (`src/earthbound_core.ld`, comment at the top explains it):
 RAM_EMU holds code + `.bss` and must leave ≥ 74 KB for the `ram_malloc`
@@ -73,7 +75,7 @@ stand-in path that works on stock `external_cores`. Set them with
 
 | Flag | Needs firmware with | Stand-in when 0 |
 | --- | --- | --- |
-| `EB_GW_ABI_TB_PRESENT` | `lcd_present_at_vblank` + `common_ingame_overlay_to` | double-buffered `lcd_swap()` |
+| `EB_GW_ABI_TB_PRESENT` | `lcd_present_at_vblank` + `common_ingame_overlay_to` | render to `eb_fb3`, copy, `lcd_swap()` |
 | `EB_GW_ABI_FATFS_FILES` | `f_open`/`f_read`/`f_write`/`f_lseek`/`f_sync`/`f_close` | newlib stdio savestates |
 | `EB_GW_ABI_AUDIO_REFILL` | SAI-ISR refill callback (no firmware branch yet) | ring drained by polling `dma_counter` |
 

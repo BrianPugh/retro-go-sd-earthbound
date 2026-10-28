@@ -205,12 +205,41 @@ void platform_video_end_frame(void)
 }
 
 #else
-/* TODO(eb-gwhb): plain double-buffered present through lcd_swap() until the
- * present-at-vblank ABI lands. Every frame waits for the previous swap to
- * latch, so the frame rate quantizes to the 60 Hz refresh (a ~35 ms frame
- * rounds to 50 ms) and the vblank wait sums with the audio pump's DMA wait.
- * eb_fb3 stays allocated only as the savestate scratch. */
-void eb_video_service(void) {}
+/* Stock-ABI present: render into eb_fb3, then copy it into the launcher's
+ * free buffer and lcd_swap(). Drawing straight into the launcher's buffer
+ * has to wait for the previous swap to latch first, which quantizes the frame
+ * rate to the 60 Hz refresh (a ~35 ms frame rounds to 50 ms, ~20 fps). With
+ * eb_fb3 as a private back buffer the CPU renders while the swap is pending,
+ * and the only wait is the copy (one 150 KiB memcpy per frame).
+ *
+ * The copy needs the previous swap to have latched (until then the launcher's
+ * "active" buffer is still on screen). When it hasn't, the frame is parked in
+ * fb3_queued and copied from eb_video_service(), which the audio pump's wait
+ * loop polls, so the vblank wait overlaps the audio wait (same scheme as the
+ * TB path above). eb_fb3 is never handed to the LTDC, so it needs no cache
+ * maintenance and is always safe to lend as the savestate scratch. */
+static bool fb3_queued;
+
+void eb_video_service(void)
+{
+    if (fb3_queued && !lcd_is_swap_pending()) {
+        memcpy(lcd_get_active_buffer(), eb_fb3, sizeof(eb_fb3));
+        common_ingame_overlay();
+        lcd_swap();
+        fb3_queued = false;
+    }
+}
+
+static void fb3_drain(void)
+{
+    while (fb3_queued) {
+        eb_video_service();
+        if (fb3_queued) {
+            wdog_refresh();
+            __WFI();
+        }
+    }
+}
 
 bool platform_video_init(void)
 {
@@ -221,8 +250,8 @@ void platform_video_shutdown(void) {}
 
 void platform_video_begin_frame(void)
 {
-    /* The launcher's active buffer is free to draw once the last swap latched. */
-    lcd_sleep_while_swap_pending();
+    /* eb_fb3 is free to draw once the queued frame has been copied out. */
+    fb3_drain();
 }
 
 void platform_video_send_scanline(int y, const pixel_t *pixels)
@@ -230,19 +259,18 @@ void platform_video_send_scanline(int y, const pixel_t *pixels)
     if (y < 0 || y >= EB_VIEWPORT_HEIGHT) {
         return;
     }
-    uint16_t *dst = (uint16_t *)lcd_get_active_buffer() + y * GW_LCD_WIDTH;
-    memcpy(dst, pixels, EB_VIEWPORT_WIDTH * sizeof(pixel_t));
+    memcpy(&eb_fb3[y * GW_LCD_WIDTH], pixels, EB_VIEWPORT_WIDTH * sizeof(pixel_t));
 }
 
 pixel_t *platform_video_get_framebuffer(void)
 {
-    return (pixel_t *)lcd_get_active_buffer();
+    return (pixel_t *)eb_fb3;
 }
 
 void platform_video_end_frame(void)
 {
-    common_ingame_overlay();
-    lcd_swap();
+    fb3_queued = true;
+    eb_video_service();
 }
 
 #endif
@@ -322,6 +350,9 @@ void *platform_savestate_scratch(size_t *out_bytes)
         lcd_present_at_vblank(tb_buf[(tb_draw + 1) % 3]);
         lcd_sleep_while_swap_pending();
     }
+#else
+    /* A parked frame still has to be copied out of eb_fb3. */
+    fb3_drain();
 #endif
 
     if (out_bytes)
