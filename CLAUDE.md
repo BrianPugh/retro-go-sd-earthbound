@@ -75,10 +75,10 @@ offline bundle. All attach to the release: `EarthBound.bin`, `earthbound.ro`,
 the `.dat`. The `pages` job then rebuilds `dist/` from the last 5 releases
 (`build_dist.py`) and puts the conversion page (`tools/page/`, vendored from
 zelda3 and byte-identical to it apart from `build-page.sh`, `test-site.mjs`
-and the README) at the site root. Pages must be enabled once by hand
-(Settings → Pages → Source: GitHub Actions), and the repo must be public:
-installers fetch through the Pages mirror, and a private repo's Pages site
-is no use to them. `make_manifest.py`, `build_dist.py` and `make_bundle.py`
+and the README) at the site root. The repo is public with Pages enabled
+(Source: GitHub Actions, done 2026-10-28). The `github-pages` environment's
+deployment policy allows `main` and tag `v*`; without the tag rule the
+tag-triggered `pages` job is refused. `make_manifest.py`, `build_dist.py` and `make_bundle.py`
 are zelda3's, vendored verbatim except `EXTRACTOR` → `tools/converter`; take
 fixes from upstream rather than editing them. `tools/converter/test-variants.mjs`
 holds the EB-only invariant (gwrg.json's ROM sha1 and output ceiling vs the
