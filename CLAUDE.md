@@ -60,6 +60,29 @@ submodule bump, run `make gen-headers` (needs the ROM) and commit
 `text_refs.h` differs from upstream's committed copy (the dialogue offsets
 the code compiles in). The `.dat` is ROM-derived: never publish it.
 
+**Releases and Pages** ([gwrg-dist-spec](https://github.com/slash-proc/gwrg-dist-spec)).
+Pushing a `v*` tag (with a matching `CHANGELOG.md` section) runs CI's
+`release` job: `stage_release.py`, then `scripts/make_manifest.py` writes
+`manifest.json` from the built bytes plus `gwrg.json` (the hand-written half:
+converter inputs/outputs, `runtime`, `storage`), and `make_bundle.py` zips the
+offline bundle. All attach to the release: `EarthBound.bin`, `earthbound.ro`,
+`eb_converter.wasm`, the ELF (`symbols[]`), `manifest.json`, the bundle; never
+the `.dat`. The `pages` job then rebuilds `dist/` from the last 5 releases
+(`build_dist.py`) and puts the conversion page (`tools/page/`, vendored from
+zelda3 and byte-identical to it apart from `build-page.sh`, `test-site.mjs`
+and the README) at the site root. Pages must be enabled once by hand
+(Settings → Pages → Source: GitHub Actions), and the repo must be public:
+installers fetch through the Pages mirror, and a private repo's Pages site
+is no use to them. `make_manifest.py`, `build_dist.py` and `make_bundle.py`
+are zelda3's, vendored verbatim except `EXTRACTOR` → `tools/converter`; take
+fixes from upstream rather than editing them. `tools/converter/test-variants.mjs`
+holds the EB-only invariant (gwrg.json's ROM sha1 and output ceiling vs the
+recipe header, and `tools/page/reference.json` vs the recipe). Bump
+`reference.json` and the output `maxBytes` with the recipe on a submodule
+bump. To dry-run conformance locally, run `make_manifest.py` + `make_bundle.py`
+on a release dir, lay it out as `dist/<tag>/` + `dist/versions.json`, and
+point the spec's `site/check.js` at it (see its `test/check.test.mjs`).
+
 **Hardware test.** Upstream `external_cores` firmware reads `/bios/logo.bin`
 (extracted from its own ELF) and BSODs with "unable to open logo file"
 without it: flash with `make -C <firmware> flash_sd`, not just `flash`.
