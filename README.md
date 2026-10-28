@@ -165,3 +165,7 @@ Please don't share `earthbound_assets.dat`, or a ROM. It contains data extracted
 - [EarthBound C port and disassembly](https://github.com/BrianPugh/earthbound), which does the real work of running the game.
 - [Retro-Go SD](https://github.com/sylverb/game-and-watch-retro-go-sd) by sylverb and contributors: the Game & Watch firmware, launcher and homebrew SDK this builds on.
 - EarthBound is © Nintendo / APE / HAL Laboratory. This project is not affiliated with or endorsed by Nintendo.
+
+## License
+
+Apache License 2.0, see `LICENSE`. Files that come from the Retro-Go SD core SDK template and from [zelda3-retro-go-sd](https://github.com/slash-proc/zelda3-retro-go-sd) (the release scripts, `tools/page/` and parts of `tools/converter/`) remain under the MIT license in `LICENSE-MIT`. Vendored third-party code under `sdk/` keeps the license stated in each file.
