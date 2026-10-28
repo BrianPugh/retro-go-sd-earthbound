@@ -87,6 +87,10 @@ recipe header, and `tools/page/reference.json` vs the recipe). Bump
 bump. To dry-run conformance locally, run `make_manifest.py` + `make_bundle.py`
 on a release dir, lay it out as `dist/<tag>/` + `dist/versions.json`, and
 point the spec's `site/check.js` at it (see its `test/check.test.mjs`).
+`tools/converter/check.sh earthbound.sfc earthbound_assets.dat` is the
+converter's end-to-end test (wasm + native output vs the `make` `.dat`).
+CI runs only on pushes to `main`, tags, and PRs *into* `main`: a PR stacked
+on another branch gets no checks until it's retargeted.
 
 **Hardware test.** Upstream `external_cores` firmware reads `/bios/logo.bin`
 (extracted from its own ELF) and BSODs with "unable to open logo file"
@@ -94,7 +98,9 @@ without it: flash with `make -C <firmware> flash_sd`, not just `flash`.
 It builds no cores in-tree, so `/cores/*.bin` left by another firmware stay
 stale. Stop any `gnwmanager gdbserver` or `monitor` before `make sdpush`
 (they fight over the probe). `make sdpush` doesn't reload a running EB:
-exit to the launcher and relaunch.
+exit to the launcher and relaunch. Inspect the card with `gnwmanager sdls`
+/ `sdpull`: plain `gnwmanager ls` mounts the LittleFS in internal flash and
+reports `LFS_ERR_CORRUPT` on this firmware, which says nothing about the SD.
 
 **Logs.** This repo has no `make monitor`. EB's `printf` goes to the
 firmware's log buffer: `gnwmanager monitor --elf <firmware>/build/gw_retro_go.elf`
