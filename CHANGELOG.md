@@ -2,6 +2,14 @@
 
 Each release tag needs a section here with a matching heading (`## [vX.Y.Z] - YYYY-MM-DD`); CI uses its body as the GitHub Release notes.
 
+## [v0.1.4] - 2026-10-28
+
+### Changed
+
+- The [conversion page](https://brianpugh.github.io/retro-go-sd-earthbound/) and the README now name the ROM they expect: `EarthBound (USA).sfc`.
+
+Nothing else changed since v0.1.3: the game and `earthbound_assets.dat` are the same.
+
 ## [v0.1.3] - 2026-10-28
 
 ### Changed
