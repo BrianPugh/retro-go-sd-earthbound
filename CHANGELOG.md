@@ -2,6 +2,14 @@
 
 Each release tag needs a section here with a matching heading (`## [vX.Y.Z] - YYYY-MM-DD`); CI uses its body as the GitHub Release notes.
 
+## [v0.1.3] - 2026-10-28
+
+### Changed
+
+- EarthBound now runs on the [Retro-Go SD v2.0.0-rc1](https://github.com/sylverb/game-and-watch-retro-go-sd/releases/tag/v2.0.0-rc1) firmware release, so you no longer need firmware built from the `external_cores` branch. Earlier versions asked for a firmware feature they never used, and rc1's launcher refused them.
+
+The game itself is unchanged, and so is `earthbound_assets.dat`: keep the one you have, but replace `EarthBound.bin` and `earthbound.ro` together.
+
 ## [v0.1.2] - 2026-10-28
 
 ### Changed
