@@ -8,7 +8,7 @@ No game data is included in this repository. You need your own copy of the US Ea
 
 ## Installing without building
 
-Each release publishes `EarthBound.bin` and `earthbound.ro` ready-built, plus a converter that turns your ROM into `earthbound_assets.dat` inside your browser (the ROM never leaves your computer). You still need the hardware and the ROM below, but none of the software. The ROM must be the US cartridge dump without a 512-byte copier header (SHA-1 `d67a8ef36ef616bc39306aa1b486e1bd3047815a`).
+Each release publishes `EarthBound.bin` and `earthbound.ro` ready-built, plus a converter that turns your ROM into `earthbound_assets.dat` inside your browser (the ROM never leaves your computer). You still need the hardware and the ROM below, but none of the software. The ROM must be `EarthBound (USA).sfc`, the US cartridge dump without a 512-byte copier header (SHA-1 `d67a8ef36ef616bc39306aa1b486e1bd3047815a`).
 
 **With a web installer:** any installer that follows [gwrg-dist-spec](https://github.com/slash-proc/gwrg-dist-spec) can install EarthBound from this repository's URL, `https://github.com/BrianPugh/retro-go-sd-earthbound`. It asks for your ROM, converts it, and puts all 3 files in `/homebrews/` on the card.
 
@@ -23,7 +23,7 @@ Each release publishes `EarthBound.bin` and `earthbound.ro` ready-built, plus a 
 
 **A ROM**
 
-- A US EarthBound ROM (`.sfc` or `.smc`, with or without the 512-byte copier header). Dump it from a cartridge you own.
+- A US EarthBound ROM, usually named `EarthBound (USA).sfc` (`.sfc` or `.smc`, with or without the 512-byte copier header for the build; the conversion page needs it without). Dump it from a cartridge you own.
 
 **Software** (macOS or Linux; on Windows, use [WSL](https://learn.microsoft.com/windows/wsl/install))
 

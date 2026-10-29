@@ -21,14 +21,14 @@
         "id": "base",
         "required": true,
         "label": {
-          "en": "Base ROM",
-          "fr": "ROM de base",
-          "de": "Basis-ROM"
+          "en": "EarthBound (USA).sfc",
+          "fr": "EarthBound (USA).sfc",
+          "de": "EarthBound (USA).sfc"
         },
         "description": {
-          "en": "US (NTSC) cartridge dump, without a 512-byte copier header.",
-          "fr": "Copie de la cartouche US (NTSC), sans en-tête de copieur de 512 octets.",
-          "de": "Kopie der US-Fassung (NTSC), ohne 512-Byte-Kopierer-Header."
+          "en": "The US cartridge dump, usually named \"EarthBound (USA).sfc\", without a 512-byte copier header.",
+          "fr": "Copie de la cartouche US, généralement nommée « EarthBound (USA).sfc », sans en-tête de copieur de 512 octets.",
+          "de": "Kopie der US-Fassung, meist „EarthBound (USA).sfc“ genannt, ohne 512-Byte-Kopierer-Header."
         },
         "extensions": [
           ".sfc",
