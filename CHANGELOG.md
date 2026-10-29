@@ -2,6 +2,14 @@
 
 Each release tag needs a section here with a matching heading (`## [vX.Y.Z] - YYYY-MM-DD`); CI uses its body as the GitHub Release notes.
 
+## [v0.1.2] - 2026-10-28
+
+### Changed
+
+- The [conversion page](https://brianpugh.github.io/retro-go-sd-earthbound/) now explains how to install: "Download everything" is the main download, its zip unpacks straight onto the SD card into `/homebrews/`, and a new "Install" step says where the files go and how to start the game.
+
+The game files are unchanged from v0.1.0.
+
 ## [v0.1.1] - 2026-10-28
 
 ### Fixed
