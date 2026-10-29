@@ -31,6 +31,9 @@
   <!-- The detail behind the "?". A title tooltip alone did nothing on click
        and nothing at all on touch, so this is a real disclosure. -->
   <p id="why-text" class="why-text" data-i18n="why.text" hidden></p>
+  <!-- What the device needs, in words a player uses. Drawn from the target the
+       manifest declares; the docs link carries the details. -->
+  <p id="requires" class="requires" hidden></p>
 
   <!-- Which release to convert against. Read from the site's own
        dist/versions.json, newest first, so a new release reaches users without
@@ -81,17 +84,27 @@
     <ul id="warnings" hidden></ul>
     <div id="results" hidden>
       <h3 data-i18n="results.heading">Output</h3>
-      <ul id="downloads"></ul>
       <!-- The converted file is only half an install: the rest is what the
            project published, which the manifest already names and hashes. This
            offers both as one download rather than sending the user off to find
-           the other half themselves. -->
+           the other half themselves. It comes first because it is what a new
+           player needs; the bare output below is for someone re-converting. -->
       <div id="zip-wrap" class="zip-wrap" hidden>
-        <button type="button" id="zip" data-i18n="zip.button">Download everything</button>
+        <button type="button" id="zip" class="primary" data-i18n="zip.button">Download everything</button>
         <p id="zip-note" class="zip-note"></p>
         <div id="zip-status" class="status" hidden></div>
+        <p class="only-output" data-i18n="results.onlyOutput">Already have the other files? Just the converted one:</p>
       </div>
+      <ul id="downloads"></ul>
     </div>
+  </section>
+
+  <!-- Where the files go. Without this the page ends at a download and leaves
+       the user to find out the rest from the README. -->
+  <section id="install" hidden>
+    <h2><span class="step">3.</span> <span data-i18n="install.heading">Install</span></h2>
+    <ol id="install-steps"></ol>
+    <p id="install-help" class="note"></p>
   </section>
 
   <footer>

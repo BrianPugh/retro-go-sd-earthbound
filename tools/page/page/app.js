@@ -281,15 +281,21 @@ async function loadVersion(manifestUrl, entry) {
   // side of the hash match and the verifier, and it is drawn from the
   // manifest, so it says the right thing for any project using this spec.
   $("about").hidden = false;
-  // `docs` is the manifest's own link for a human; source.repo is the
-  // fallback for a manifest published before that field existed.
-  if (manifest.docs) {
-    $("repo-link").href = manifest.docs;
-  } else if (manifest.source?.repo) {
-    $("repo-link").href = `https://github.com/${manifest.source.repo}`;
-  }
+  const docs = docsUrl();
+  if (docs) $("repo-link").href = docs;
   renderLocalised();
   updateGo();
+}
+
+/**
+ * The manifest's own link for a human (`docs`), or source.repo as the fallback
+ * for a manifest published before that field existed.
+ */
+function docsUrl() {
+  const manifest = state.manifest;
+  if (manifest?.docs) return manifest.docs;
+  if (manifest?.source?.repo) return `https://github.com/${manifest.source.repo}`;
+  return null;
 }
 
 // --- the version picker ----------------------------------------------------
@@ -314,12 +320,10 @@ function renderPicker() {
   for (const v of offered()) {
     const opt = document.createElement("option");
     opt.value = v.tag;
-    // The firmware requirement travels with the version because this is the
-    // only place a user learns it: a binary built for a newer ABI hardfaults
-    // on device with nothing on screen to explain why.
-    const abi = v.requiresAbi
-      ? t().version.abi(v.requiresAbi.version, v.requiresAbi.minSize)
-      : "";
+    // The firmware requirement travels with the version, because versions can
+    // differ in it. The ABI struct size (minSize) is left out: it means
+    // nothing to a player, and the line under the heading says it in words.
+    const abi = v.requiresAbi ? t().version.abi(v.requiresAbi.version) : "";
     opt.textContent = [v.tag, v.prerelease ? t().version.prerelease : "", abi]
       .filter(Boolean).join(" · ");
     select.append(opt);
@@ -379,6 +383,8 @@ function renderLocalised() {
     document.title = $("title").textContent;
   }
   renderPicker();
+  renderRequires();
+  renderInstall();
   if (!tool) {
     $("no-converter").textContent = t().version.noConverter;
     return;
@@ -917,18 +923,95 @@ function targetForTool() {
 }
 
 /**
+ * The SD-card folder a target's files go in, or null when the page can't say.
+ * The launcher loads homebrews from /homebrews/, and spec 05-host puts a
+ * homebrew's converted files beside its binary. A core splits its files
+ * between /cores/ and roms/<system>/, which the manifest doesn't name, so a
+ * core gets a flat zip and a pointer to its docs.
+ */
+function cardDir(target) {
+  return target?.kind === "homebrew" ? "homebrews" : null;
+}
+
+/** What the device needs, under the heading, in words a player uses. */
+function renderRequires() {
+  const el = $("requires");
+  const target = targetForTool();
+  if (!target?.label) {
+    el.hidden = true;
+    return;
+  }
+  el.replaceChildren(`${t().app.requires(target.label, target.requiresAbi?.version)} `);
+  const docs = docsUrl();
+  if (docs) {
+    const a = document.createElement("a");
+    a.href = docs;
+    a.textContent = t().app.requiresLink;
+    el.append(a);
+  }
+  el.hidden = false;
+}
+
+/** Step 3: where the files go once downloaded. */
+function renderInstall() {
+  const section = $("install");
+  const list = $("install-steps");
+  const target = targetForTool();
+  list.replaceChildren();
+  if (!state.tool || !target) {
+    section.hidden = true;
+    return;
+  }
+
+  const dir = cardDir(target);
+  const steps = [];
+  if (dir) {
+    // With nothing published alongside, there is no zip: just the one file.
+    steps.push((target.artifacts ?? []).length ? t().install.unzip(dir) : t().install.copy(dir));
+    steps.push(t().install.sameVersion);
+    steps.push(t().install.launchHomebrew(state.manifest?.title ?? ""));
+  } else {
+    steps.push(t().install.generic);
+  }
+  for (const text of steps) {
+    const li = document.createElement("li");
+    li.textContent = text;
+    list.append(li);
+  }
+
+  const help = $("install-help");
+  help.replaceChildren();
+  const docs = docsUrl();
+  if (docs) {
+    const a = document.createElement("a");
+    a.href = docs;
+    a.textContent = t().install.help;
+    help.append(a);
+  }
+  help.hidden = !docs;
+  section.hidden = false;
+}
+
+/**
  * Everything the install needs, as one file: the artifacts the project
  * published plus the outputs this run produced. The spec defines exactly this
  * set -- every artifact, plus the declared outputs of every tool the target
  * uses -- so nothing here is a judgement call about what belongs.
  *
- * Flat, no directories: where these files go on the card is the installer's
- * decision and differs between firmware versions, so a zip that guessed would
- * be wrong somewhere.
+ * Laid out like the card when the page knows the folder (cardDir), so it can
+ * be unzipped straight onto the SD root; flat otherwise. The folder comes from
+ * the page, never from a manifest string.
  */
 async function buildInstallZip(outputs) {
   const target = targetForTool();
   if (!target) throw new Error("manifest declares no target");
+  const dir = cardDir(target);
+  const onCard = (name) => {
+    if (name.includes("/") || name.includes("\\")) {
+      throw new Error(`file name must not contain a path: ${name}`);
+    }
+    return dir ? `${dir}/${name}` : name;
+  };
 
   const entries = [];
   for (const artifact of target.artifacts ?? []) {
@@ -946,7 +1029,7 @@ async function buildInstallZip(outputs) {
     if (artifact.sha256 && (await digest("SHA-256", data)) !== artifact.sha256) {
       throw new Error(t().zip.hashMismatch(artifact.filename));
     }
-    entries.push({ name: artifact.filename, data });
+    entries.push({ name: onCard(artifact.filename), data });
   }
 
   // Only the outputs this target actually installs. A tool may produce more
@@ -961,7 +1044,7 @@ async function buildInstallZip(outputs) {
   }
   for (const out of outputs) {
     if (wanted.size === 0 || wanted.has(out.name)) {
-      entries.push({ name: out.name, data: new Uint8Array(out.data) });
+      entries.push({ name: onCard(out.name), data: new Uint8Array(out.data) });
     }
   }
 

@@ -74,11 +74,14 @@ offline bundle. All attach to the release: `EarthBound.bin`, `earthbound.ro`,
 `eb_converter.wasm`, the ELF (`symbols[]`), `manifest.json`, the bundle; never
 the `.dat`. The `pages` job then rebuilds `dist/` from the last 5 releases
 (`build_dist.py`) and puts the conversion page (`tools/page/`, vendored from
-zelda3 and byte-identical to it apart from `build-page.sh`, `test-site.mjs`,
-the README and `app.js`) at the site root. `app.js` passes the module the
-manifest's output *ids* and renames results to their filenames: zelda3's
-module emits filenames, ours emits the id as spec 04-processor requires
-(`test-variants.mjs` guards it). The repo is public with Pages enabled
+zelda3; diverges in `build-page.sh`, `test-site.mjs`, the README and the
+page itself) at the site root. Page changes: `app.js` passes the module the
+manifest's output *ids* and renames results to their filenames (zelda3's
+module emits filenames; ours emits the id as spec 04-processor requires,
+guarded by `test-variants.mjs`); a requirements line, a "3. Install" step and
+"Download everything" as the primary download; and for a `homebrew` target
+the zip mirrors the card (`homebrews/...`, `zip.mjs` allows plain relative
+paths). All generic over the manifest, so they can go back to zelda3. The repo is public with Pages enabled
 (Source: GitHub Actions, done 2026-10-28). The `github-pages` environment's
 deployment policy allows `main` and tag `v*`; without the tag rule the
 tag-triggered `pages` job is refused. `make_manifest.py`, `build_dist.py` and `make_bundle.py`

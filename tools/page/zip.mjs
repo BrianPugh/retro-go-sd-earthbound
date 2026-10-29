@@ -6,7 +6,8 @@
 // project is built on -- what runs here is settled at build time and verified
 // before it runs. So: no dependencies, and short enough to audit.
 //
-// Only what is needed is implemented. No directories, no zip64, no encryption,
+// Only what is needed is implemented. No directory entries (unzip tools create
+// folders from the entry paths), no zip64, no encryption,
 // no multi-disk. Entries are stored or deflated, whichever is smaller, and the
 // archive is a plain sequence of local headers followed by a central directory.
 //
@@ -97,10 +98,14 @@ export async function makeZip(entries, { date = new Date() } = {}) {
   const seen = new Set();
   for (const e of entries) {
     if (!e.name) throw new Error("zip entry has no name");
-    if (e.name.includes("/") || e.name.includes("\\")) {
-      // Flat by design. A path would also be the one place a crafted manifest
-      // could aim a write somewhere unexpected, so it is refused outright.
-      throw new Error(`zip entry name must not contain a path: ${e.name}`);
+    // A relative path of plain segments, so the zip can mirror the card
+    // ("homebrews/EarthBound.bin"). Nothing that climbs out of where it is
+    // unpacked: no absolute path, no "." or "..", no backslash, no empty
+    // segment. The page builds the folder part itself; a manifest filename
+    // with a slash in it is refused before it gets here.
+    if (e.name.includes("\\") ||
+        e.name.split("/").some((seg) => seg === "" || seg === "." || seg === "..")) {
+      throw new Error(`zip entry name must be a plain relative path: ${e.name}`);
     }
     if (seen.has(e.name)) throw new Error(`duplicate zip entry: ${e.name}`);
     seen.add(e.name);

@@ -35,6 +35,9 @@ const en = {
   app: {
     heading: (title) => `${title} asset converter`,
     lede: (game, output) => `Convert your ${game} ROM into ${output}`,
+    requires: (label, abi) =>
+      `For ${label}. Needs firmware recent enough for this version${abi ? ` (ABI ${abi} or newer)` : ""}.`,
+    requiresLink: "What you need",
   },
   lang: {
     label: "Language",
@@ -98,7 +101,7 @@ const en = {
     // The firmware requirement, shown per version because this is the only
     // place a user learns it. A binary built for a newer ABI hardfaults on
     // device with nothing on screen to explain why.
-    abi: (version, minSize) => `firmware ABI ${version}+ (${minSize} bytes)`,
+    abi: (version) => `firmware ABI ${version}+`,
     retained: (n) => `Showing the ${n} most recent releases.`,
     olderReleases: "Older releases",
     pinned: (tag) => `Version ${tag}`,
@@ -122,6 +125,18 @@ const en = {
     hash: "Hash",
     hashMatches: "Hash matches ✓",
     hashDiffers: "Hash does not match ✗",
+    onlyOutput: "Already have the other files? Just the converted one:",
+  },
+  install: {
+    heading: "Install",
+    unzip: (dir) =>
+      `Unzip the "Download everything" file onto the root of your SD card, so its files end up in /${dir}/. Replace any older copies.`,
+    copy: (dir) => `Copy the downloaded file into /${dir}/ on your SD card.`,
+    sameVersion: "Keep all of these files from the same version: a mix of old and new ones won't start.",
+    launchHomebrew: (title) =>
+      `Put the card back in the Game & Watch, open the launcher's Homebrew tab and pick ${title}.`,
+    generic: "Copy the files to your SD card as the project's documentation describes.",
+    help: "Help and troubleshooting",
   },
   footer: {
     source: "Source and documentation:",
@@ -141,6 +156,9 @@ const fr = {
   app: {
     heading: (title) => `Convertisseur de ressources ${title}`,
     lede: (game, output) => `Convertissez votre ROM ${game} en ${output}`,
+    requires: (label, abi) =>
+      `Pour ${label}. Nécessite un firmware assez récent pour cette version${abi ? ` (ABI ${abi} ou plus récente)` : ""}.`,
+    requiresLink: "Ce qu'il vous faut",
   },
   lang: {
     label: "Langue",
@@ -194,7 +212,7 @@ const fr = {
     label: "Version",
     showPrereleases: "Afficher les préversions",
     prerelease: "préversion",
-    abi: (version, minSize) => `ABI firmware ${version}+ (${minSize} octets)`,
+    abi: (version) => `ABI firmware ${version}+`,
     retained: (n) => `Les ${n} versions les plus récentes.`,
     olderReleases: "Versions plus anciennes",
     pinned: (tag) => `Version ${tag}`,
@@ -218,6 +236,18 @@ const fr = {
     hash: "Empreinte",
     hashMatches: "Empreinte conforme ✓",
     hashDiffers: "Empreinte non conforme ✗",
+    onlyOutput: "Vous avez déjà les autres fichiers ? Seulement le fichier converti :",
+  },
+  install: {
+    heading: "Installer",
+    unzip: (dir) =>
+      `Décompressez le fichier « Tout télécharger » à la racine de votre carte SD, pour que ses fichiers arrivent dans /${dir}/. Remplacez les anciennes copies.`,
+    copy: (dir) => `Copiez le fichier téléchargé dans /${dir}/ sur votre carte SD.`,
+    sameVersion: "Tous ces fichiers doivent venir de la même version : un mélange d'anciens et de nouveaux ne démarrera pas.",
+    launchHomebrew: (title) =>
+      `Remettez la carte dans la Game & Watch, ouvrez l'onglet Homebrew du lanceur et choisissez ${title}.`,
+    generic: "Copiez les fichiers sur votre carte SD comme l'indique la documentation du projet.",
+    help: "Aide et dépannage",
   },
   footer: {
     source: "Code source et documentation :",
@@ -237,6 +267,9 @@ const de = {
   app: {
     heading: (title) => `${title} Asset-Konverter`,
     lede: (game, output) => `Wandle dein ${game} ROM in ${output} um`,
+    requires: (label, abi) =>
+      `Für ${label}. Braucht eine Firmware, die neu genug für diese Version ist${abi ? ` (ABI ${abi} oder neuer)` : ""}.`,
+    requiresLink: "Was du brauchst",
   },
   lang: {
     label: "Sprache",
@@ -290,7 +323,7 @@ const de = {
     label: "Version",
     showPrereleases: "Vorabversionen anzeigen",
     prerelease: "Vorabversion",
-    abi: (version, minSize) => `Firmware-ABI ${version}+ (${minSize} Bytes)`,
+    abi: (version) => `Firmware-ABI ${version}+`,
     retained: (n) => `Die ${n} neuesten Versionen.`,
     olderReleases: "Ältere Versionen",
     pinned: (tag) => `Version ${tag}`,
@@ -314,6 +347,18 @@ const de = {
     hash: "Prüfsumme",
     hashMatches: "Prüfsumme stimmt ✓",
     hashDiffers: "Prüfsumme stimmt nicht ✗",
+    onlyOutput: "Die anderen Dateien hast du schon? Nur die umgewandelte:",
+  },
+  install: {
+    heading: "Installieren",
+    unzip: (dir) =>
+      `Entpacke die Datei von „Alles herunterladen“ ins Hauptverzeichnis deiner SD-Karte, damit die Dateien in /${dir}/ landen. Ersetze ältere Kopien.`,
+    copy: (dir) => `Kopiere die heruntergeladene Datei nach /${dir}/ auf deiner SD-Karte.`,
+    sameVersion: "Alle diese Dateien müssen aus derselben Version stammen: Eine Mischung aus alten und neuen startet nicht.",
+    launchHomebrew: (title) =>
+      `Steck die Karte wieder in die Game & Watch, öffne im Launcher den Homebrew-Tab und wähle ${title}.`,
+    generic: "Kopiere die Dateien auf deine SD-Karte, wie es in der Dokumentation des Projekts steht.",
+    help: "Hilfe und Fehlerbehebung",
   },
   footer: {
     source: "Quellcode und Dokumentation:",
