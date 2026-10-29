@@ -96,7 +96,14 @@ point the spec's `site/check.js` at it (see its `test/check.test.mjs`).
 `tools/converter/check.sh earthbound.sfc earthbound_assets.dat` is the
 converter's end-to-end test (wasm + native output vs the `make` `.dat`).
 CI runs only on pushes to `main`, tags, and PRs *into* `main`: a PR stacked
-on another branch gets no checks until it's retargeted.
+on another branch gets no checks until it's retargeted, and the retarget
+itself starts no run (it needs a new push or a close/reopen). The workflow
+has no `workflow_dispatch`, so run its jobs locally instead: the converter
+job's `node` tests, and a ROM-less build in a clean worktree.
+The Pages site only changes when a `v*` tag is pushed. To test page changes
+before tagging, build the site with `tools/page/build-page.sh`, put a
+`dist/` beside it (the live one, or `make_manifest.py` output for a new
+`gwrg.json`), and drive it in headless Chromium with the ROM.
 
 **Hardware test.** Upstream `external_cores` firmware reads `/bios/logo.bin`
 (extracted from its own ELF) and BSODs with "unable to open logo file"
