@@ -18,6 +18,7 @@
  */
 
 #include <odroid_system.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
@@ -47,6 +48,14 @@
  * stereo samples per game frame, which is the half-buffer SAI consumes
  * per 16.69 ms at 32 kHz mono — frame and DMA cadence stay aligned. */
 #define EB_AUDIO_SAMPLE_RATE   (32000)
+
+/* The ABI prefix EB needs, which scripts/set_eb_abi_min_size.py packs as
+ * required_abi_min_size in place of the bridge's sizeof(gw_firmware_abi_t).
+ * Fields from rg_storage_rename on are only reached through CORE_ABI_HAS, so
+ * firmware without them (v2.0.0-rc1) can still run EB; the script fails the
+ * build if one is read unguarded. */
+__attribute__((used, section(".gw_core_bridge_probe")))
+const uint32_t EB_REQUIRED_ABI_SIZE = offsetof(gw_firmware_abi_t, rg_storage_rename);
 
 /* Shared with gw_input.c — the platform layer reads from this each frame. */
 odroid_gamepad_state_t eb_joystick;

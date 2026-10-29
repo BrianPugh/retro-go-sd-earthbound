@@ -331,7 +331,10 @@ $(RO_BIN): $(TARGET_ELF) $(RELOC_CHECK) scripts/append_eb_reloc_table.py
 	$(V)$(CP) -O binary --only-section=.rodata_earthbound $< $@
 	$(V)python3 scripts/append_eb_reloc_table.py $(TOOL_PREFIX) $< $@ || (rm -f $@; exit 1)
 
+# required_abi_min_size: the ABI prefix EB needs, not the bridge's
+# sizeof(gw_firmware_abi_t) (see the script's docstring).
 pack: $(TARGET_BIN) $(RO_BIN) $(COVER_JPG) $(RELOC_CHECK)
+	$(V)python3 scripts/set_eb_abi_min_size.py $(TOOL_PREFIX) $(TARGET_ELF) $(TARGET_BIN)
 	$(V)$(ECHO) [ PACK GWHB ] "$(PACKED_BIN)" version=$(CORE_VERSION)
 	$(V)python3 $(PACK_HOMEBREW) \
 		--elf $(TARGET_ELF) --bin $(TARGET_BIN) \

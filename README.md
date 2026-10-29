@@ -18,7 +18,7 @@ Each release publishes `EarthBound.bin` and `earthbound.ro` ready-built, plus a 
 
 **Hardware**
 
-- A Game & Watch (Mario or Zelda) with the SD-card mod, running Retro-Go SD firmware built from the [`external_cores` branch](https://github.com/sylverb/game-and-watch-retro-go-sd/tree/external_cores). Older firmware can't load homebrews like this one.
+- A Game & Watch (Mario or Zelda) with the SD-card mod, running Retro-Go SD [v2.0.0-rc1](https://github.com/sylverb/game-and-watch-retro-go-sd/releases/tag/v2.0.0-rc1) or newer (its release notes say how to install it), or a build of the [`external_cores` branch](https://github.com/sylverb/game-and-watch-retro-go-sd/tree/external_cores). Retro-Go SD 1.x can't load homebrews like this one.
 - A way to get files onto its SD card: either a card reader, or a debug probe (ST-Link, J-Link or a Raspberry Pi Pico) with [gnwmanager](https://github.com/BrianPugh/gnwmanager).
 
 **A ROM**
@@ -148,9 +148,9 @@ Quiet scenes run at the original's 60 fps. Busy scenes (lots of sprites, big bat
 
 **A blue error screen saying "unable to open logo file" when the Game & Watch starts.** That's the firmware, before EarthBound runs: it was flashed without its SD-card files. Re-flash the firmware with `make flash_sd` (in the firmware repository) instead of `make flash`.
 
-**EarthBound doesn't appear in the Homebrew tab.** Check that the files are in `/homebrews/` (with an `s`), and that your firmware is from the `external_cores` branch.
+**EarthBound doesn't appear in the Homebrew tab.** Check that the files are in `/homebrews/` (with an `s`), and that your firmware is Retro-Go SD v2.0.0-rc1 or newer.
 
-**The launcher refuses to start EarthBound** (for example with an ABI or version error). EarthBound needs a newer Retro-Go SD build than the one installed. Update the firmware from the `external_cores` branch.
+**The launcher refuses to start EarthBound** (for example with an ABI or version error). EarthBound needs a newer Retro-Go SD build than the one installed. Update to v2.0.0-rc1 or newer.
 
 ## Sharing
 

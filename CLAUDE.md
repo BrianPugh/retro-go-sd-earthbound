@@ -20,8 +20,8 @@ the default linker contract. This file is the memory + porting checklist.
 ## EarthBound port (this tree)
 
 This tree builds EarthBound (`external/earthbound`, the C reimplementation)
-as a GWHB homebrew for the upstream firmware's `external_cores` branch
-(ABI v2). It replaces the firmware-fork integration (firmware PR #91,
+as a GWHB homebrew for upstream firmware with ABI v2: the `v2.0.0-rc1`
+release and the `external_cores` branch. It replaces the firmware-fork integration (firmware PR #91,
 `earthbound` branch of game-and-watch-retro-go-sd), which is being closed in
 favor of this repo: don't port changes back to it. The SDK template sections
 below still apply.
@@ -112,8 +112,11 @@ reports `LFS_ERR_CORRUPT` on this firmware, which says nothing about the SD.
 firmware's log buffer: `gnwmanager monitor --elf <firmware>/build/gw_retro_go.elf`
 (the ELF of the flashed firmware).
 
-**Stock firmware only.** EB must run on stock `external_cores` firmware;
-don't add code that needs new ABI fields. Video renders into `eb_fb3` and
+**Stock firmware only.** EB must run on stock `v2.0.0-rc1` and later;
+don't add code that needs new ABI fields. HW-verified on both rc1 and
+`external_cores` 1b025902 (2026-10-28). rc1 installs from source with
+`git checkout v2.0.0-rc1` + `make flash_sd` (on a `flash_sd` dev device,
+rc1's `retro-go_update.bin` on the SD root was left untouched at boot). Video renders into `eb_fb3` and
 copies into the launcher buffer before `lcd_swap()`, which avoids the 60 Hz
 quantization of plain double buffering (that ran ~20 fps); the copy costs
 well under 1 ms (a DMA2D copy measured no faster). Savestates use newlib
@@ -137,9 +140,13 @@ only; the present copy shows up in `PPU`. To A/B two builds, load the same
 savestate in each (saves are compatible across builds of the same EB code).
 
 **SDK sync gotchas.**
-- The bridge sets `required_abi_min_size = sizeof(gw_firmware_abi_t)`. Every
-  sync from a firmware with more ABI fields raises the minimum firmware for
-  all binaries built afterwards, even if EB doesn't call the new functions.
+- The bridge sets `required_abi_min_size = sizeof(gw_firmware_abi_t)`, so
+  every sync that appends ABI fields would raise the minimum firmware.
+  `scripts/set_eb_abi_min_size.py` (run by `make pack`) packs
+  `EB_REQUIRED_ABI_SIZE` from `src/main_earthbound.c` instead: the ABI up to
+  `rg_storage_rename` (908 bytes, rc1's whole struct). It fails the build if
+  a field past that cutoff is read without `CORE_ABI_HAS`; then move the
+  cutoff, knowing it raises the minimum firmware.
 - `scripts/sync_from_firmware.sh` rewrites FatFs files with CRLF churn.
   Revert those hunks before committing.
 - In the root `Makefile`, `CORE_EXTRA_OBJECTS` must be set before
